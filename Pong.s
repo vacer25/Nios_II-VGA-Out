@@ -88,13 +88,6 @@
 .equ WIN_TEXT_X, WIDTH/2 - CHAR_WIDTH*4 - 1
 .equ WIN_TEXT_Y, HEIGHT/2 - CHAR_HEIGHT + 1
 
-.equ BG_COL, 	0x0
-.equ P_COL, 	0xFFFF
-.equ B_COL, 	0xF0
-.equ MID_COL,	0xFFFF
-.equ CHAR_COL, 	0xFFFF
-.equ WIN_COL,   0xF0
-
 .equ SPACE_CHAR,10
 .equ P_CHAR,	11
 .equ W_CHAR,	12
@@ -300,6 +293,7 @@ _start:
     
 Loop:
     FILL_COLOR	BG_COL
+	
 #asdfasdf:
 #    ldw  	r4, CONTINUE_FLAG(r0)
 #    beq		r4, r0, asdfasdf
@@ -870,6 +864,7 @@ FillColourFast:
     stw r9,  4(sp)
     stw r10, 8(sp)
 
+
 .if LOG2_BYTES_PER_PIXEL == 0
     andi r8, r4, 0xff
     slli r9, r8, 8
@@ -877,7 +872,7 @@ FillColourFast:
     slli r9, r8, 16
     or   r8, r9, r8
 .elseif LOG2_BYTES_PER_PIXEL == 1
-    andi r8, r8, 0xffff
+    andi r8, r4, 0xffff
     slli r9, r8, 16
 	or   r8, r9, r8
 .elseif LOG2_BYTES_PER_PIXEL == 2

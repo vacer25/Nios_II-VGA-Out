@@ -11,4 +11,5 @@ Various VGA video output projects on the NIOS II processor.
 ## Todo:
 1. ~~Figure out double buffering~~
 	- Done
-2. Interface with the SNES controller
+1. Make the ball speed constant on all display sizes
+1. Interface with the SNES controller
