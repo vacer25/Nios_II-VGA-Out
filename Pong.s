@@ -1,41 +1,73 @@
+# TARGET_SYSTEM = 0: DE0
+# TARGET_SYSTEM = 1: DE1-SoC
+# TARGET_SYSTEM = 2: DE2 / DE2-115
+# TARGET_SYSTEM = 3: DE10-Lite
+
+.equ TARGET_SYSTEM, 0
+
 # -------------------- SCREEN DATA --------------------
 
-# 320x240, 1024 bytes/row, 2 bytes per pixel: DE1-SoC, DE2, DE2-115
-/*
-.equ WIDTH, 320
-.equ HEIGHT, 240
-.equ BYTES_PER_ROW	, 1024
-.equ LOG2_BYTES_PER_ROW, 10
-.equ LOG2_BYTES_PER_PIXEL, 1
-*/
-# 160x120, 256 bytes/row, 1 byte per pixel: DE10-Lite
-#.equ WIDTH, 160
-#.equ HEIGHT, 120
-#.equ LOG2_BYTES_PER_ROW, 8
-#.equ LOG2_BYTES_PER_PIXEL, 0
-# 128 bytes/row, 1 byte per pixel: DE0
+.if TARGET_SYSTEM == 0
+    # 128 bytes/row, 1 byte per pixel: DE0
+    .equ WIDTH, 80
+    .equ HEIGHT, 60
+    .equ LOG2_BYTES_PER_ROW, 7
+    .equ LOG2_BYTES_PER_PIXEL, 0
+.elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 2
+    # 320x240, 1024 bytes/row, 2 bytes per pixel: DE1-SoC, DE2, DE2-115
+    .equ WIDTH, 320
+    .equ HEIGHT, 240
+    .equ LOG2_BYTES_PER_ROW, 10
+    .equ LOG2_BYTES_PER_PIXEL, 1
+.elseif TARGET_SYSTEM == 3
+    # 160x120, 256 bytes/row, 1 byte per pixel: DE10-Lite
+    .equ WIDTH, 160
+    .equ HEIGHT, 120
+    .equ LOG2_BYTES_PER_ROW, 8
+    .equ LOG2_BYTES_PER_PIXEL, 0
+.endif
 
-.equ WIDTH, 80
-.equ HEIGHT, 60
-.equ BYTES_PER_ROW, 128
-.equ LOG2_BYTES_PER_ROW, 7
-.equ LOG2_BYTES_PER_PIXEL, 0
+.equ BYTES_PER_ROW, (1 << LOG2_BYTES_PER_ROW)
+.equ BYTES_PER_PIXEL, (1 << LOG2_BYTES_PER_PIXEL)
+
+.if TARGET_SYSTEM == 0 || TARGET_SYSTEM == 3
+    # 8-bit colours: DE0, DE10-Lite
+    .equ BG_COL, 	0x00
+    .equ P_COL, 	0xFF
+    .equ B_COL, 	0xF0
+    .equ MID_COL,	0xFF
+    .equ CHAR_COL, 	0xFF
+    .equ WIN_COL,   0xF0
+.elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 2
+    # 16-bit colours: DE1-SoC, DE2, DE2-115
+    .equ BG_COL, 	0x0000
+    .equ P_COL, 	0xFFFF
+    .equ B_COL, 	0xFF00
+    .equ MID_COL,	0xFFFF
+    .equ CHAR_COL, 	0xFFFF
+    .equ WIN_COL,   0xFF00
+.endif
+
+.equ PIXBUF, 0x08000000					# Pixel buffer.     Same on all boards.
+.equ CHARBUF, 0x09000000				# Character buffer. Same on all boards.
 
 # -------------------- HARDWARE --------------------
 
-.equ PIXBUF, 0x08000000					# Pixel buffer. Same on all boards.
-.equ CHARBUF, 0x09000000				# Character buffer. Same on all boards.
-.equ VGAPIX_CONTROL, 0x10003020
-#.equ VGAPIX_CONTROL, 0xff203020
+.if TARGET_SYSTEM == 0 || TARGET_SYSTEM == 2
+    # DE0, DE2, DE2-115
+    .equ VGAPIX_CONTROL, 0x10003020
+    .equ TIMER_BASE_ADDR, 0x10002000
+    .equ SWITCHES_BASE_ADDR, 0x10000040
+    .equ BUTTONS_BASE_ADDR, 0x10000050
+.elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 3
+    # DE1-SoC, DE10-Lite
+    .equ VGAPIX_CONTROL, 0xff203020
+    .equ TIMER_BASE_ADDR, 0xff202000
+    .equ SWITCHES_BASE_ADDR, 0xff200040
+    .equ BUTTONS_BASE_ADDR, 0xff200050
+.endif
 
 .equ TIMER_INTERVAL, 2500000
-.equ TIMER_BASE_ADDR, 0x10002000
-#.equ TIMER_BASE_ADDR, 0xff202000
-
-.equ SWITCHES_BASE_ADDR, 0x10000040
-.equ BUTTONS_BASE_ADDR, 0x10000050
-#.equ SWITCHES_BASE_ADDR, 0xff200040
-#.equ BUTTONS_BASE_ADDR, 0xff200050
 
 # -------------------- DATA --------------------
 
@@ -207,13 +239,13 @@ _start:
 	movia 	sp, 0x800000				# Initial stack pointer
 	
 	# configure vga stuffs
-	movia	r2, VGAPIX_CONTROL
-	movia	r3, PIXBUF
-	stwio	r3, 4(r2)
-	stwio	r3, 0(r2)
-	
-	stwio	r3, 4(r2)
-	stwio	r3, 0(r2)
+	#movia	r2, VGAPIX_CONTROL
+	#movia	r3, PIXBUF
+	#stwio	r3, 4(r2)
+	#stwio	r3, 0(r2)
+	#
+	#stwio	r3, 4(r2)
+	#stwio	r3, 0(r2)
     
     movi 	r16, WIDTH					# Width
     movi 	r17, HEIGHT-1				# Height
@@ -262,7 +294,7 @@ _start:
     stw  	r4, SCORE_P1(r0)
     stw  	r5, SCORE_P2(r0)    
 	
-	call	ClearScreen
+	#call	ClearScreen
     
 # -------------------- LOOP --------------------
     
@@ -797,18 +829,22 @@ WritePixel:
     stw r4, 8(sp)
     stw r5, 12(sp)
     stw r6, 16(sp)
-
-	movi r2, LOG2_BYTES_PER_ROW		# log2(bytes per row)
-    movi r3, LOG2_BYTES_PER_PIXEL	# log2(bytes per pixel)
     
-    sll r5, r5, r2
-    sll r4, r4, r3
+    slli r5, r5, LOG2_BYTES_PER_ROW
+    slli r4, r4, LOG2_BYTES_PER_PIXEL
     add r5, r5, r4
     movia r4, PIXBUF
     add r5, r5, r4
     
-    bne r3, r0, 1f		# 8bpp or 16bpp?
+.if LOG2_BYTES_PER_PIXEL == 0
   	stbio r6, 0(r5)		# Write 8-bit pixel
+.elseif LOG2_BYTES_PER_PIXEL == 1
+    sthio r6, 0(r5)		# Write 16-bit pixel
+.elseif LOG2_BYTES_PER_PIXEL == 2
+    stwio r6, 0(r5)		# Write 16-bit pixel
+.else
+    .error "Unknown pixel size"
+.endif
     
     ldw r6, 16(sp)
     ldw r5, 12(sp)
@@ -829,39 +865,46 @@ WritePixel:
 	ret
 
 FillColourFast:
-	subi sp, sp, 28
-    stw r4,  0(sp)
-    stw r5,  4(sp)
-    stw r6,  8(sp)
-    stw r16, 12(sp)
-    stw r17, 16(sp)
-    stw r18, 20(sp)
-    #stw ra,  24(sp)
-    
-    slli r18, r4,16
-	or r18,r18,r4
-	
-	movia r5, (BYTES_PER_ROW)*HEIGHT-4
-	movia r6, PIXBUF
-	add r4,r6,r5
-	aaaa:
-		stwio r18,0(r4)
-		subi r4,r4,4
-		nop
-		nop
-		nop
-		nop
-		nop
-		nop
-		bge r4,r6,aaaa
+	subi sp, sp, 12
+    stw r8,  0(sp)
+    stw r9,  4(sp)
+    stw r10, 8(sp)
 
-    #ldw ra,  24(sp)
-    ldw r18, 20(sp)
-    #ldw r17, 16(sp)
-    #ldw r16, 12(sp)  
-    ldw r6,  8(sp)
-    ldw r5,  4(sp)
-    ldw r4,  0(sp)  
-    addi sp, sp, 28
+.if LOG2_BYTES_PER_PIXEL == 0
+    andi r8, r4, 0xff
+    slli r9, r8, 8
+    or   r8, r8, r9
+    slli r9, r8, 16
+    or   r8, r9, r8
+.elseif LOG2_BYTES_PER_PIXEL == 1
+    andi r8, r8, 0xffff
+    slli r9, r8, 16
+	or   r8, r9, r8
+.elseif LOG2_BYTES_PER_PIXEL == 2
+    # don't need to do anything
+.else
+    .error "Unknown pixel size"
+.endif
+	
+	movia r9, (BYTES_PER_ROW)*HEIGHT-4
+	movia r10, PIXBUF
+	add   r9, r9, r10
+
+# This is a temporary label!! You can do this!! :)
+1:
+    stwio r8, 0(r9)
+    subi  r9, r9, 4
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    bge   r9, r10, 1b
+
+    ldw r8,  0(sp)
+    ldw r9,  4(sp)
+    ldw r10, 8(sp)
+    addi sp, sp, 12
     ret
 	
