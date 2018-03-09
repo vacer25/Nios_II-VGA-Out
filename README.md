@@ -9,5 +9,6 @@ Various VGA video output projects on the NIOS II processor.
 	- First player to reach a score of 9 wins
 	
 ## Todo:
-1. Figure out double buffering
+1. ~~Figure out double buffering~~
+	- Done
 2. Interface with the SNES controller
