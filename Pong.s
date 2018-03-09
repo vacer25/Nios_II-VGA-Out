@@ -74,8 +74,8 @@
 .equ CHAR_WIDTH, 3
 .equ CHAR_HEIGHT, 6
 
-.equ P_WIDTH, 2
-.equ P_HEIGHT, 10
+.equ P_WIDTH, 2							# Paddle width
+.equ P_HEIGHT, 10						# Paddle height
 
 .equ P1_X, 3
 .equ P2_X, WIDTH-3-P_WIDTH
@@ -191,7 +191,7 @@
     
 	andi	r19, et, 1					# Check bit 0
 	beq		r19, r0, END_HANDLER 		# Was not interrupt 0
-	call	EXT_IRQ0
+	call	TIMER_IRQ
 
 	# Exit point for the exception handler
 END_HANDLER:
@@ -202,8 +202,9 @@ END_HANDLER:
 
 	.org	0x100
 	.extern CONTINUE_FLAG
-	# Device-specific code for each hardware interrupt source
-EXT_IRQ0:
+    
+	# Device-specific code for interval timer interrupt source
+TIMER_IRQ:
 	subi 	sp, sp, 12
     stw 	ra,  0(sp)
     stw 	r4,  4(sp)
@@ -212,18 +213,17 @@ EXT_IRQ0:
     movia 	r5, TIMER_BASE_ADDR			# Interval timer base address
 	sthio 	r0, 0(r5) 					# Clear the interrupt
     
+    # Set can continue running flag to 1
     ldw		r4, CONTINUE_FLAG(r0)
     movi	r4, 1
     stw		r4, CONTINUE_FLAG(r0)
-    
-    #FILL_COLOR	0xF0
-    
+        
     ldw 	r5,  8(sp)  
     ldw 	r4,  4(sp)
     ldw 	ra,  0(sp)
     addi 	sp, sp, 12
-	ret # Return from the interrupt-service routine
-
+	ret 								# Return from the ISR
+    
 # -------------------- START --------------------
 
 	.global _start
@@ -231,7 +231,7 @@ EXT_IRQ0:
 _start:
 	movia 	sp, 0x800000				# Initial stack pointer
 	
-	# configure vga stuffs
+	# Configure vga stuffs
 	#movia	r2, VGAPIX_CONTROL
 	#movia	r3, PIXBUF
 	#stwio	r3, 4(r2)
@@ -292,16 +292,20 @@ _start:
 # -------------------- LOOP --------------------
     
 Loop:
-    FILL_COLOR	BG_COL
+    FILL_COLOR	BG_COL					# Clear screen
 	
-#asdfasdf:
-#    ldw  	r4, CONTINUE_FLAG(r0)
-#    beq		r4, r0, asdfasdf
-#    movi	r4, 0
-#    stw		r4, CONTINUE_FLAG(r0)
-#    br		Loop
+	# -------------------- TESTING CODE --------------------
+
+/*
+asdfasdf:
+    ldw  	r4, CONTINUE_FLAG(r0)
+    beq		r4, r0, asdfasdf
+    movi	r4, 0
+    stw		r4, CONTINUE_FLAG(r0)
+    br		Loop
+*/
     
-    /*
+/*
     FILL_COLOR	B_COL
     BIG_NUMBER_CONST	1, 1, 0, CHAR_COL
     BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*1, 1, 1, CHAR_COL
@@ -320,7 +324,7 @@ Loop:
     BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*14, 1, N_CHAR, CHAR_COL
     BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*15, 1, S_CHAR, CHAR_COL
     br		End
-    */
+*/
     
     # -------------------- DRAWING --------------------
     
@@ -329,37 +333,37 @@ Loop:
     
    	DV_LINE	0, HEIGHT, WIDTH/2, MID_COL				# Midline
     
-    ldw		r11, SCORE_P1(r0)
-    ldw		r12, SCORE_P2(r0)
+    ldw		r11, SCORE_P1(r0)						# Load left scores
+    ldw		r12, SCORE_P2(r0)						# Load right scores
     BIG_NUMBER SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Left score
     BIG_NUMBER SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Right score
     
     movui	r6, B_COL
     WRITE_PIXEL 	r18, r19, r6					# Ball
     
-    	# -------------------- CHECK WIN --------------------
+    # -------------------- CHECK WIN --------------------
     
-    ldw		r11, SCORE_P1(r0)
-    ldw		r12, SCORE_P2(r0)
+    ldw		r11, SCORE_P1(r0)						# Load left scores
+    ldw		r12, SCORE_P2(r0)						# Load right scores
     
-    movi	r10, SCORE_TO_WIN
-    bge		r11, r10, P1_WINS
-    bge		r12, r10, P2_WINS
+    movi	r10, SCORE_TO_WIN						
+    bge		r11, r10, P1_WINS						# If left score >= scrore to win, left player wins
+    bge		r12, r10, P2_WINS						# If right score >= scrore to win, right player wins
     br 		Check_Input
     
 P1_WINS:
-    PADDLE 	P1_X, r22, WIN_COL						# Left paddle
-    BIG_NUMBER SCORE_1_X, SCORE_Y, r11, WIN_COL		# Left score
-    ldw		r2, WINNER(r0)							# Load winner from mem.
+    PADDLE 	P1_X, r22, WIN_COL						# Draw left paddle
+    BIG_NUMBER SCORE_1_X, SCORE_Y, r11, WIN_COL		# Draw left score
+    ldw		r2, WINNER(r0)							
     movi	r2, 1									# Set winner to 1
-    stw		r2, WINNER(r0)							# Store winner to mem.
+    stw		r2, WINNER(r0)							
     br		Print_Win_Text
 P2_WINS:
-    PADDLE 	P2_X, r23, WIN_COL						# Right paddle
-    BIG_NUMBER SCORE_2_X, SCORE_Y, r12, WIN_COL		# Right score
-    ldw		r2, WINNER(r0)							# Load winner from mem.
+    PADDLE 	P2_X, r23, WIN_COL						# Draw right paddle
+    BIG_NUMBER SCORE_2_X, SCORE_Y, r12, WIN_COL		# Draw right score
+    ldw		r2, WINNER(r0)							
     movi	r2, 2									# Set winner to 2
-    stw		r2, WINNER(r0)							# Store winner to mem.
+    stw		r2, WINNER(r0)							
     br		Print_Win_Text
     
 	# -------------------- INPUTS --------------------
@@ -373,49 +377,49 @@ Check_Input:
     
 	# -------------------- PADDLES --------------------
     
-    beq		r10, r0, Skip_P1_Plus_Y
-    beq		r22, r14, Skip_P1_Plus_Y
-    addi	r22, r22, 1
+    beq		r10, r0, Skip_P1_Plus_Y					# If left paddle down switch is off, don't move it down
+    beq		r22, r14, Skip_P1_Plus_Y				# If left paddle is at bottom, don't  move it down
+    addi	r22, r22, 1								# Else, move it down
 Skip_P1_Plus_Y:
-    beq		r11, r0, Skip_P1_Minus_Y
-    beq		r22, r0, Skip_P1_Minus_Y
-    subi	r22, r22, 1
+    beq		r11, r0, Skip_P1_Minus_Y                # If left paddle up switch is off, don't  move it up
+    beq		r22, r0, Skip_P1_Minus_Y                # If left paddle is at top, don't  move it up
+    subi	r22, r22, 1                             # Else, move it up
 Skip_P1_Minus_Y:
-    beq		r12, r0, Skip_P2_Plus_Y
-    beq		r23, r14, Skip_P2_Plus_Y
-    addi	r23, r23, 1
+    beq		r12, r0, Skip_P2_Plus_Y                 # If right paddle down switch is off, don't move it down
+    beq		r23, r14, Skip_P2_Plus_Y                # If right paddle is at bottom, don't  move it down
+    addi	r23, r23, 1                             # Else, move it down
 Skip_P2_Plus_Y:
-    beq		r13, r0, Skip_P2_Minus_Y
-    beq		r23, r0, Skip_P2_Minus_Y
-    subi	r23, r23, 1
+    beq		r13, r0, Skip_P2_Minus_Y                # If right paddle up switch is off, don't  move it up
+    beq		r23, r0, Skip_P2_Minus_Y                # If right paddle is at top, don't  move it up
+    subi	r23, r23, 1                             # Else, move it up
 Skip_P2_Minus_Y:
 
 	# -------------------- BALL --------------------
     
-    movi 	r10, P1_X+P_WIDTH						# Paddle 1 (Left)  X coordinate
-    movi 	r11, P2_X-1								# Paddle 2 (Right) X coordinate
+    movi 	r10, P1_X+P_WIDTH						# Left paddle  X coordinate
+    movi 	r11, P2_X-1								# Right paddle X coordinate
 
 X_Calculations:
-	beq		r18, r10, B_Check_P_1_Hit				# Ball X = Paddle 1 X
-	beq		r18, r11, B_Check_P_2_Hit				# Ball X = Paddle 2 X
-    beq		r18, r16, B_Hit_Right					# Ball X = Right wall
-	beq		r18, r0,  B_Hit_Left					# Ball X = Left wall
+	beq		r18, r10, B_Check_P_1_Hit				# If Ball X = Left paddle X, check if paddle was hit
+	beq		r18, r11, B_Check_P_2_Hit				# If Ball X = Right paddle X, check if paddle was hit
+    beq		r18, r16, B_Hit_Right					# If Ball X = Right wall, increase left score, reset ball
+	beq		r18, r0,  B_Hit_Left					# If Ball X = Left wall, increase right score, reset ball
     br		Update_B_X
 B_Check_P_1_Hit:
-	blt		r19, r22, Update_B_X					# If Ball Y higher than Paddle 1 Y, skip
+	blt		r19, r22, Update_B_X					# If Ball Y higher than left paddle Y, skip
     addi	r10, r22, P_HEIGHT
-	bgt		r19, r10, Update_B_X					# If Ball Y lower than Paddle 1 Y, skip
+	bgt		r19, r10, Update_B_X					# If Ball Y lower than left paddle Y, skip
 	movi	r20, 1									# Set ball X direction to right
     br		Update_B_X
 B_Check_P_2_Hit:
-	blt		r19, r23, Update_B_X					# If Ball Y higher than Paddle 2 Y, skip
+	blt		r19, r23, Update_B_X					# If Ball Y higher than right paddle Y, skip
     addi	r11, r23, P_HEIGHT
-	bgt		r19, r11, Update_B_X					# If Ball Y lower than Paddle 2 Y, skip
+	bgt		r19, r11, Update_B_X					# If Ball Y lower than right paddle Y, skip
 	movi	r20, -1									# Set ball X direction to left
     br    Update_B_X
     
 B_Hit_Right:
-	V_LINE	0, HEIGHT, WIDTH-1, B_COL
+	V_LINE	0, HEIGHT, WIDTH-1, B_COL				# Draw vertical hit indicator line
     movi	r18, WIDTH/2							# Ball X Pos in middle
     movi	r19, HEIGHT/2							# Ball Y Pos in middle
 	movi	r20, -1									# Ball X direction set to left
@@ -424,7 +428,7 @@ B_Hit_Right:
     stw		r11, SCORE_P1(r0)						# Store score 1 (left paddle)
     br    Update_B_X
 B_Hit_Left:
-	V_LINE	0, HEIGHT, 0, B_COL
+	V_LINE	0, HEIGHT, 0, B_COL						# Draw vertical hit indicator line
     movi	r18, WIDTH/2							# Ball X Pos in middle
     movi	r19, HEIGHT/2							# Ball Y Pos in middle
 	movi	r20, 1									# # Ball X direction set to right
@@ -434,35 +438,36 @@ B_Hit_Left:
     br    Update_B_X
     
 Update_B_X:
-    add		r18, r18, r20
+    add		r18, r18, r20							# Move the ball in the X direction
     
 Y_Calculations:
-    beq		r19, r17, B_Set_Y_Dir_Minus
-	beq		r19, r0, B_Set_Y_Dir_Plus
+    beq		r19, r17, B_Set_Y_Dir_Minus				# If Ball Y = Bottom wall, bounce
+	beq		r19, r0, B_Set_Y_Dir_Plus               # If Ball Y = Top wall, bounce
     br		Update_B_Y
 B_Set_Y_Dir_Minus:
-	movi	r21, -1
+	movi	r21, -1									# Ball Y direction set to up
     br		Update_B_Y
 B_Set_Y_Dir_Plus:
-	movi	r21, 1
+	movi	r21, 1									# Ball Y direction set to down
     
 Update_B_Y:
-    add		r19, r19, r21
+    add		r19, r19, r21							# Move the ball in the Y direction
     
 	# -------------------- DELAY --------------------
     
 Wait:
-    ldw  	r4, CONTINUE_FLAG(r0)
-    beq		r4, r0, Wait
-    movi	r4, 0
-    stw		r4, CONTINUE_FLAG(r0)
-    br		Loop
+    ldw  	r4, CONTINUE_FLAG(r0)					# Load the continue flag from mem.
+    beq		r4, r0, Wait							# If flag is not set, loop back and keep waiting
+    movi	r4, 0									# Otherwise, clear the flag
+    stw		r4, CONTINUE_FLAG(r0)					# Store the continue flag from mem.
+    br		Loop									
 
 	# -------------------- DISPLAY WIN TEXT --------------------
 
 Print_Win_Text:
-	ldw		r2, WINNER(r0)		# Load winner from mem.
+	ldw		r2, WINNER(r0)							# Load winner from mem.
     
+	# Draw the "PX Wins" where X is the winner number (1 or 2)
     BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*0, WIN_TEXT_Y, P_CHAR, WIN_COL
     BIG_NUMBER			WIN_TEXT_X+(CHAR_WIDTH+1)*1, WIN_TEXT_Y, r2, WIN_COL
     BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*2, WIN_TEXT_Y, SPACE_CHAR, WIN_COL
@@ -473,7 +478,7 @@ Print_Win_Text:
 
 Wait_For_Restart_Button:
     ldwio	r8, 0(r3)								# Read buttons
-    andi	r10, r8, 1								# Check button 0
+    andi	r10, r8, 1								# Get button 0 status
     bne		r10, r0, _start							# Branch to start if button is pressed
 	br		Wait_For_Restart_Button					# Otherwise, keep waiting for a button press
 
@@ -483,10 +488,16 @@ End:
     
 	.data
 	.global CONTINUE_FLAG
-CONTINUE_FLAG:	.word 	0
-SCORE_P1:		.word 	0
-SCORE_P2:		.word 	0
-WINNER:			.word	0
+CONTINUE_FLAG:	.word 	0							# Gets set by the interval timer indicating that the loop can continue
+SCORE_P1:		.word 	0							# Left player score
+SCORE_P2:		.word 	0							# Right player score
+WINNER:			.word	0							# Temporary variable to record the winning players'n number (1 or 2)
+
+# Character map holds the data for the big score characters
+# The MSB       is column 0 (left)  of the char, drawn from bottom to top
+# The next byte is column 1         of the char, drawn from bottom to top
+# The next byte is column 2         of the char, drawn from bottom to top
+# The LSB       is column 3 (right) of the char, drawn from bottom to top
 
 CHAR_MAP:		.word 0x3E223E00	# 0
 				.word 0x243E2000	# 1
@@ -527,39 +538,39 @@ DrawBigNumber:
     stw 	r21, 36(sp)
     stw 	ra,  40(sp)
     
-    mov 	r14, r4						# r14 <- Start X
+    mov 	r14, r4									# r14 <- Start X
     movi	r18, CHAR_HEIGHT
     movi	r16, CHAR_WIDTH-1
     
     movi	r21, BG_COL
     
-    slli	r6, r6, 2					# Multiply number to draw in r6 by 4 to get proper offset
+    slli	r6, r6, 2								# Multiply number to draw in r6 by 4 to get proper offset
     
-    movia	r19, 0x80000000				# r19 <- Bitmask (1 + 31 zeros)
+    movia	r19, 0x80000000							# r19 <- Bitmask (1 + 31 zeros)
     
-    ldw		r20, CHAR_MAP(r6)			# Load current char map
+    ldw		r20, CHAR_MAP(r6)						# Load current char map
     
     # Two loops to draw the big char
 	LoopX:  
-    	movi 	r17, 7					# Reset current Y to 7
-    	ldw 	r15, 4(sp) 				# r15 <- Start Y
-        addi	r15, r15, 8				# Add 8 to start Y to begin drawing from bottom
-		LoopY:  
-        	bge		r17, r18, Skip_Draw	# If current Y counter > Char weight, skip draw
-			and		r5, r19, r20		# Check if current bit is set
-            beq		r5, r0, Draw_BG_Col	# If current bit is 0, skip draw
-            WRITE_PIXEL	r14, r15, r7	# Draw the pixel in the specified color
-            br		Skip_Draw
-        Draw_BG_Col:
-        	WRITE_PIXEL	r14, r15, r21	# Draw the pixel in the background color
-        Skip_Draw:
-        	srli	r19, r19, 1			# Shift bitmask right
-            subi 	r15, r15, 1			# Decrement Y pos
-            subi 	r17, r17, 1			# Decrement Y counter
-            bge 	r17, r0, LoopY		# Loop if Y counter >= 0
-        addi 	r14, r14, 1				# Increment X pos
-        subi 	r16, r16, 1				# Decrement X counter
-        bge 	r16, r0, LoopX			# Loop if X counter >= 0
+    	movi 	r17, 7								# Reset current Y to 7
+    	ldw 	r15, 4(sp) 							# r15 <- Start Y
+        addi	r15, r15, 8							# Add 8 to start Y to begin drawing from bottom
+		LoopY:  			
+        	bge		r17, r18, Skip_Draw				# If current Y counter > Char weight, skip draw
+			and		r5, r19, r20					# Check if current bit is set
+            beq		r5, r0, Draw_BG_Col				# If current bit is 0, skip draw
+            WRITE_PIXEL	r14, r15, r7				# Draw the pixel in the specified color
+            br		Skip_Draw			
+        Draw_BG_Col:			
+        	WRITE_PIXEL	r14, r15, r21				# Draw the pixel in the background color
+        Skip_Draw:			
+        	srli	r19, r19, 1						# Shift bitmask right
+            subi 	r15, r15, 1						# Decrement Y pos
+            subi 	r17, r17, 1						# Decrement Y counter
+            bge 	r17, r0, LoopY					# Loop if Y counter >= 0
+        addi 	r14, r14, 1							# Increment X pos
+        subi 	r16, r16, 1							# Decrement X counter
+        bge 	r16, r0, LoopX						# Loop if X counter >= 0
     
     ldw 	ra,  40(sp)
     ldw 	r21, 36(sp)
