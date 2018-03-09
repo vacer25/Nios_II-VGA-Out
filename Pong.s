@@ -3,7 +3,7 @@
 # TARGET_SYSTEM = 2: DE2 / DE2-115
 # TARGET_SYSTEM = 3: DE10-Lite
 
-.equ TARGET_SYSTEM, 0
+.equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
 
 # -------------------- SCREEN DATA --------------------
 
@@ -71,22 +71,24 @@
 
 # -------------------- DATA --------------------
 
-.equ CHAR_WIDTH, 3
-.equ CHAR_HEIGHT, 6
+.equ CHAR_WIDTH, 3						# Character width
+.equ CHAR_HEIGHT, 6						# Character height
 
-.equ P_WIDTH, 2							# Paddle width
-.equ P_HEIGHT, 10						# Paddle height
+.equ P_WIDTH, 2							# DRAW_PADDLE width
+.equ P_HEIGHT, 10						# DRAW_PADDLE height
 
-.equ P1_X, 3
-.equ P2_X, WIDTH-3-P_WIDTH
+.equ P1_X, 3							# Left  DRAW_PADDLE X coordinate
+.equ P2_X, WIDTH-3-P_WIDTH				# Right DRAW_PADDLE X coordinate
 
-.equ SCORE_TO_WIN, 	9
-.equ SCORE_1_X, WIDTH/2 - CHAR_WIDTH*3
-.equ SCORE_2_X, WIDTH/2 + CHAR_WIDTH*2+1
-.equ SCORE_Y,	4
+.equ SCORE_TO_WIN, 	9					# Score reqired to win
+.equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3	# Left  score X coordinate
+.equ SCORE_2_X, WIDTH/2+CHAR_WIDTH*2+1	# Right score X coordinate
+.equ SCORE_Y,	4						# Score number lables Y coordinate
 
-.equ WIN_TEXT_X, WIDTH/2 - CHAR_WIDTH*4 - 1
-.equ WIN_TEXT_Y, HEIGHT/2 - CHAR_HEIGHT + 1
+.equ WIN_TEXT_X, WIDTH/2-CHAR_WIDTH*4-1	# Win text lable X coordinate
+.equ WIN_TEXT_Y, HEIGHT/2-CHAR_HEIGHT+1 # Win text lable Y coordinate
+
+# Character numbers in the character map
 
 .equ SPACE_CHAR,10
 .equ P_CHAR,	11
@@ -95,13 +97,15 @@
 .equ N_CHAR,	14
 .equ S_CHAR,	15
 
-# r18:	Ball X Pos
-# r19:	Ball Y Pos
-# r20:	Ball X Dir
-# r21:	Ball Y Dir
+# Register usage:
 
-# r22:	Paddle 1 (Left)  Y
-# r23:	Paddle 2 (Right) Y
+# r18:	Ball X coordinate
+# r19:	Ball Y coordinate
+# r20:	Ball X direction
+# r21:	Ball Y direction
+
+# r22:	Left DRAW_PADDLE  Y coordinate
+# r23:	Right DRAW_PADDLE Y coordinate
 
 # -------------------- MACROS --------------------
 
@@ -134,14 +138,14 @@
     call 	FillColourFast
 .endm
 
-.macro	WRITE_CHAR	col, row, char
+.macro	DRAW_CHAR	col, row, char
 	movi	r4, \col
 	movi	r5, \row
     movi	r6, \char
     call 	WriteChar
 .endm
 
-.macro	BIG_NUMBER	x, y, char, col
+.macro	DRAW_BIG_CHAR	x, y, char, col
 	movi	r4, \x
 	movi	r5, \y
     mov 	r6, \char
@@ -149,7 +153,7 @@
     call 	DrawBigNumber
 .endm
 
-.macro	BIG_NUMBER_CONST	x, y, char, col
+.macro	DRAW_BIG_CHAR_CONST	x, y, char, col
 	movi	r4, \x
 	movi	r5, \y
     movi 	r6, \char
@@ -157,18 +161,18 @@
     call 	DrawBigNumber
 .endm
 
-.macro	WRITE_PIXEL	x, y, col
+.macro	DRAW_PIXEL	x, y, col
 	mov		r4, \x
 	mov		r5, \y
     mov		r6, \col
     call 	WritePixel
 .endm
 
-.macro	PADDLE	x, y, col
+.macro	DRAW_PADDLE	x, y, col
 	movi	r4, \x
     mov		r5, \y
     movui	r6, \col
-    call 	DrawPaddle
+    call 	DrawDRAW_PADDLE
 .endm
 
 # -------------------- INTERRUPTS --------------------
@@ -248,8 +252,8 @@ _start:
     movi 	r15, 255					# Number of NOP delays
     
     movi 	r14, HEIGHT-P_HEIGHT		# Midline X coordinate
-    movi	r22, HEIGHT/2-P_HEIGHT/2 	# Paddle 1 (Left)  in middle
-    movi	r23, HEIGHT/2-P_HEIGHT/2 	# Paddle 2 (Right) in middle
+    movi	r22, HEIGHT/2-P_HEIGHT/2 	# DRAW_PADDLE 1 (Left)  in middle
+    movi	r23, HEIGHT/2-P_HEIGHT/2 	# DRAW_PADDLE 2 (Right) in middle
     movi	r18, WIDTH/2				# Ball X Pos in middle
     movi	r19, HEIGHT/2				# Ball Y Pos in middle
     movi 	r20, 1						# Ball X dir
@@ -307,39 +311,39 @@ asdfasdf:
     
 /*
     FILL_COLOR	B_COL
-    BIG_NUMBER_CONST	1, 1, 0, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*1, 1, 1, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*2, 1, 2, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*3, 1, 3, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*4, 1, 4, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*5, 1, 5, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*6, 1, 6, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*7, 1, 7, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*8, 1, 8, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*9, 1, 9, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*10, 1, SPACE_CHAR, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*11, 1, P_CHAR, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*12, 1, W_CHAR, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*13, 1, I_CHAR, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*14, 1, N_CHAR, CHAR_COL
-    BIG_NUMBER_CONST	1+(CHAR_WIDTH+1)*15, 1, S_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1, 1, 0, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*1, 1, 1, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*2, 1, 2, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*3, 1, 3, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*4, 1, 4, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*5, 1, 5, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*6, 1, 6, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*7, 1, 7, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*8, 1, 8, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*9, 1, 9, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*10, 1, SPACE_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*11, 1, P_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*12, 1, W_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*13, 1, I_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*14, 1, N_CHAR, CHAR_COL
+    DRAW_BIG_CHAR_CONST	1+(CHAR_WIDTH+1)*15, 1, S_CHAR, CHAR_COL
     br		End
 */
     
     # -------------------- DRAWING --------------------
     
-    PADDLE 	P1_X, r22, P_COL						# Left paddle
-    PADDLE 	P2_X, r23, P_COL						# Right paddle
+    DRAW_PADDLE 	P1_X, r22, P_COL				# Draw left paddle
+    DRAW_PADDLE 	P2_X, r23, P_COL				# Draw right paddle
     
-   	DV_LINE	0, HEIGHT, WIDTH/2, MID_COL				# Midline
+   	DV_LINE	0, HEIGHT, WIDTH/2, MID_COL				# Draw midline
     
-    ldw		r11, SCORE_P1(r0)						# Load left scores
-    ldw		r12, SCORE_P2(r0)						# Load right scores
-    BIG_NUMBER SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Left score
-    BIG_NUMBER SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Right score
+    ldw		r11, SCORE_P1(r0)						# Load left score
+    ldw		r12, SCORE_P2(r0)						# Load right score
+    DRAW_BIG_CHAR SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Draw left score
+    DRAW_BIG_CHAR SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Draw right score
     
     movui	r6, B_COL
-    WRITE_PIXEL 	r18, r19, r6					# Ball
+    DRAW_PIXEL 	r18, r19, r6					# Ball
     
     # -------------------- CHECK WIN --------------------
     
@@ -352,15 +356,15 @@ asdfasdf:
     br 		Check_Input
     
 P1_WINS:
-    PADDLE 	P1_X, r22, WIN_COL						# Draw left paddle
-    BIG_NUMBER SCORE_1_X, SCORE_Y, r11, WIN_COL		# Draw left score
+    DRAW_PADDLE 	P1_X, r22, WIN_COL				# Draw left paddle
+    DRAW_BIG_CHAR SCORE_1_X, SCORE_Y, r11, WIN_COL	# Draw left score
     ldw		r2, WINNER(r0)							
     movi	r2, 1									# Set winner to 1
     stw		r2, WINNER(r0)							
     br		Print_Win_Text
 P2_WINS:
-    PADDLE 	P2_X, r23, WIN_COL						# Draw right paddle
-    BIG_NUMBER SCORE_2_X, SCORE_Y, r12, WIN_COL		# Draw right score
+    DRAW_PADDLE 	P2_X, r23, WIN_COL				# Draw right paddle
+    DRAW_BIG_CHAR SCORE_2_X, SCORE_Y, r12, WIN_COL	# Draw right score
     ldw		r2, WINNER(r0)							
     movi	r2, 2									# Set winner to 2
     stw		r2, WINNER(r0)							
@@ -375,7 +379,7 @@ Check_Input:
     andi	r12, r8, 1								# Check switch 1 (Right paddle down)
     andi	r13, r8, 2								# Check switch 2 (Right paddle up)
     
-	# -------------------- PADDLES --------------------
+	# -------------------- PADDLE MOVEMENT --------------------
     
     beq		r10, r0, Skip_P1_Plus_Y					# If left paddle down switch is off, don't move it down
     beq		r22, r14, Skip_P1_Plus_Y				# If left paddle is at bottom, don't  move it down
@@ -394,7 +398,7 @@ Skip_P2_Plus_Y:
     subi	r23, r23, 1                             # Else, move it up
 Skip_P2_Minus_Y:
 
-	# -------------------- BALL --------------------
+	# -------------------- BALL MOVEMENT --------------------
     
     movi 	r10, P1_X+P_WIDTH						# Left paddle  X coordinate
     movi 	r11, P2_X-1								# Right paddle X coordinate
@@ -468,13 +472,13 @@ Print_Win_Text:
 	ldw		r2, WINNER(r0)							# Load winner from mem.
     
 	# Draw the "PX Wins" where X is the winner number (1 or 2)
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*0, WIN_TEXT_Y, P_CHAR, WIN_COL
-    BIG_NUMBER			WIN_TEXT_X+(CHAR_WIDTH+1)*1, WIN_TEXT_Y, r2, WIN_COL
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*2, WIN_TEXT_Y, SPACE_CHAR, WIN_COL
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*3, WIN_TEXT_Y, W_CHAR, WIN_COL
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*4, WIN_TEXT_Y, I_CHAR, WIN_COL
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*5, WIN_TEXT_Y, N_CHAR, WIN_COL
-    BIG_NUMBER_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, WIN_TEXT_Y, S_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*0, WIN_TEXT_Y, P_CHAR, WIN_COL
+    DRAW_BIG_CHAR			WIN_TEXT_X+(CHAR_WIDTH+1)*1, WIN_TEXT_Y, r2, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*2, WIN_TEXT_Y, SPACE_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*3, WIN_TEXT_Y, W_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*4, WIN_TEXT_Y, I_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*5, WIN_TEXT_Y, N_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, WIN_TEXT_Y, S_CHAR, WIN_COL
 
 Wait_For_Restart_Button:
     ldwio	r8, 0(r3)								# Read buttons
@@ -559,10 +563,10 @@ DrawBigNumber:
         	bge		r17, r18, Skip_Draw				# If current Y counter > Char weight, skip draw
 			and		r5, r19, r20					# Check if current bit is set
             beq		r5, r0, Draw_BG_Col				# If current bit is 0, skip draw
-            WRITE_PIXEL	r14, r15, r7				# Draw the pixel in the specified color
+            DRAW_PIXEL	r14, r15, r7				# Draw the pixel in the specified color
             br		Skip_Draw			
         Draw_BG_Col:			
-        	WRITE_PIXEL	r14, r15, r21				# Draw the pixel in the background color
+        	DRAW_PIXEL	r14, r15, r21				# Draw the pixel in the background color
         Skip_Draw:			
         	srli	r19, r19, 1						# Shift bitmask right
             subi 	r15, r15, 1						# Decrement Y pos
@@ -589,7 +593,7 @@ DrawBigNumber:
 # r4: x
 # r5: y
 # r6: colour value
-DrawPaddle:
+DrawDRAW_PADDLE:
 	subi sp, sp, 40
     stw r4,  0(sp)
     stw r5,  4(sp)
@@ -887,9 +891,9 @@ FillColourFast:
     slli r9, r8, 16
 	or   r8, r9, r8
 .elseif LOG2_BYTES_PER_PIXEL == 2
-    # don't need to do anything
+    # Don't need to do anything
 .else
-    .error "Unknown pixel size"
+    .error "Error: Unknown pixel size"
 .endif
 	
 	movia r9, (BYTES_PER_ROW)*HEIGHT-4
