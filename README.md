@@ -20,3 +20,4 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	- In progress
 1. Interface with the SNES controller
 	- In progress
+1. Add Pong AI
