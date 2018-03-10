@@ -25,6 +25,8 @@
     .equ HEIGHT, 120
     .equ LOG2_BYTES_PER_ROW, 8
     .equ LOG2_BYTES_PER_PIXEL, 0
+.else
+    .error "Error: Invalid target system"
 .endif
 
 .equ BYTES_PER_ROW, (1 << LOG2_BYTES_PER_ROW)
@@ -875,7 +877,7 @@ WritePixel:
 .elseif LOG2_BYTES_PER_PIXEL == 2
     stwio 	r6, 0(r5)								# Write 32-bit pixel to vga pixel buffer
 .else
-    .error "Unknown pixel size"
+    .error "Error: Unknown pixel size"
 .endif
     
     ldw 	r6, 16(sp)
