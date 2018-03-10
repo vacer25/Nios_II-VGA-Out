@@ -1,4 +1,4 @@
-# Nios_II-VGA-Out
+# Nios II VGA Out
 Various VGA video output projects on the NIOS II processor, written in assembly.
 
 The programs are designed to be compatible with Altera DE0, DE1-SoC, DE2 / DE2-115, and DE10-Lite FPGA boards.  

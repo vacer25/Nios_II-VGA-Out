@@ -74,11 +74,11 @@
 .equ CHAR_WIDTH, 3						# Character width
 .equ CHAR_HEIGHT, 6						# Character height
 
-.equ P_WIDTH, 2							# DRAW_PADDLE width
-.equ P_HEIGHT, 10						# DRAW_PADDLE height
+.equ P_WIDTH, 2							# paddle width
+.equ P_HEIGHT, 10						# paddle height
 
-.equ P1_X, 3							# Left  DRAW_PADDLE X coordinate
-.equ P2_X, WIDTH-3-P_WIDTH				# Right DRAW_PADDLE X coordinate
+.equ P1_X, 3							# Left  paddle X coordinate
+.equ P2_X, WIDTH-3-P_WIDTH				# Right paddle X coordinate
 
 .equ SCORE_TO_WIN, 	9					# Score reqired to win
 .equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3	# Left  score X coordinate
@@ -104,8 +104,8 @@
 # r20:	Ball X direction
 # r21:	Ball Y direction
 
-# r22:	Left DRAW_PADDLE  Y coordinate
-# r23:	Right DRAW_PADDLE Y coordinate
+# r22:	Left paddle  Y coordinate
+# r23:	Right paddle Y coordinate
 
 # -------------------- MACROS --------------------
 
@@ -342,8 +342,8 @@ asdfasdf:
     DRAW_BIG_CHAR SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Draw left score
     DRAW_BIG_CHAR SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Draw right score
     
-    movui	r6, B_COL
-    DRAW_PIXEL 	r18, r19, r6					# Ball
+    movui		r6, B_COL
+    DRAW_PIXEL 	r18, r19, r6						# Ball
     
     # -------------------- CHECK WIN --------------------
     
@@ -503,7 +503,7 @@ WINNER:			.word	0							# Temporary variable to record the winning players'n num
 # The next byte is column 2         of the char, drawn from bottom to top
 # The LSB       is column 3 (right) of the char, drawn from bottom to top
 
-CHAR_MAP:		.word 0x3E223E00	# 0
+BIG_CHAR_MAP:	.word 0x3E223E00	# 0
 				.word 0x243E2000	# 1
 				.word 0x322A2400	# 2
 				.word 0x222A3E00	# 3
@@ -524,10 +524,10 @@ CHAR_MAP:		.word 0x3E223E00	# 0
     
 # -------------------- DRAWING --------------------
 
-# r4: x
-# r5: y
-# r6: char
-# r7: colour value
+# r4: X
+# r5: Y
+# r6: Character number in character map
+# r7: Colour value
 DrawBigNumber:
 	subi 	sp, sp, 44
     stw 	r4,  0(sp)
@@ -552,7 +552,7 @@ DrawBigNumber:
     
     movia	r19, 0x80000000							# r19 <- Bitmask (1 + 31 zeros)
     
-    ldw		r20, CHAR_MAP(r6)						# Load current char map
+    ldw		r20, BIG_CHAR_MAP(r6)					# Load current char map
     
     # Two loops to draw the big char
 	LoopX:  
@@ -591,9 +591,9 @@ DrawBigNumber:
     ret
   
   
-# r4: x
-# r5: y
-# r6: colour value
+# r4: X
+# r5: Y
+# r6: Colour value
 DrawPaddle:
 	subi 	sp, sp, 40
     stw 	r4,  0(sp)
@@ -607,21 +607,23 @@ DrawPaddle:
     stw 	r20, 32(sp)
     stw 	ra,  36(sp)
     
-	mov 	r16, r4
-    mov 	r17, r4
-    addi 	r17, r17, P_WIDTH
-    mov 	r18, r5
-    mov 	r19, r5
-    addi 	r19, r19, P_HEIGHT
-    mov 	r20, r6
+	mov 	r16, r4									# r16 <- Start X
+    mov 	r17, r4									
+    addi 	r17, r17, P_WIDTH						# r17 <- End X
+	
+    mov 	r18, r5                                 # r18 <- Start Y
+    mov 	r19, r5                                 
+    addi 	r19, r19, P_HEIGHT                      # r19 <- End Y
+	
+    mov 	r20, r6									# r20 <- Colour
 
-    1:  mov		r4, r18
-        mov		r5, r19
-        mov		r6, r16
-        mov		r7, r20
-        call 	DrawVLine
-        addi 	r16, r16, 1
-        blt 	r16, r17, 1b
+    1:  mov		r4, r18								# Line start Y <- start X
+        mov		r5, r19								# Line end Y   <- end Y
+        mov		r6, r16								# Line X	   <- current X
+        mov		r7, r20								# Line colour  <- specified colour
+        call 	DrawVLine							# Draw a single vertical line
+        addi 	r16, r16, 1							# Increment current X
+        blt 	r16, r17, 1b						# Loop if current X < end X
         
 	ldw 	ra,  36(sp)
     ldw 	r20, 32(sp)
@@ -637,10 +639,10 @@ DrawPaddle:
     ret
 
 	
-# r4: x1
-# r5: x2
-# r6: y
-# r7: colour value
+# r4: Start X
+# r5: End X
+# r6: Y
+# r7: Colour value
 DrawHLine:
 	subi 	sp, sp, 24
     stw 	r4,  0(sp)
@@ -650,15 +652,15 @@ DrawHLine:
     stw 	r17, 16(sp)
     stw 	ra,  20(sp)
     
-	mov  	r17, r4									# x1
-    mov  	r16, r5									# x2
-    mov  	r5, r6									# y
-    mov  	r6, r7									# Colour
+	mov  	r17, r4									# r17 <- Start X
+    mov  	r16, r5									# r16 <- End X
+    mov  	r5, r6									# r5  <- Y
+    mov  	r6, r7									# r6  <- Colour
     
-    1:	mov 	r4, r16
+    1:	mov 	r4, r16								# Pixel X <- current X
         call 	WritePixel							# Draw one pixel
-        subi	r16, r16, 1
-        bge 	r16, r17, 1b
+        subi	r16, r16, 1							# Decrement current X
+        bge 	r16, r17, 1b						# Loop if current X >= start X
     
     ldw 	ra,  20(sp)
     ldw 	r17, 16(sp)  
@@ -670,10 +672,10 @@ DrawHLine:
     ret
 
 	
-# r4: y1
-# r5: y2
-# r6: x
-# r7: colour value
+# r4: Start Y
+# r5: End Y
+# r6: X
+# r7: Colour value
 DrawVLine:
 	subi	sp, sp, 24
     stw 	r4,  0(sp)
@@ -683,15 +685,15 @@ DrawVLine:
     stw 	r17, 16(sp)
     stw 	ra,  20(sp)
     
-    mov  	r17, r4									# y1
-    mov  	r16, r5									# y2
-    mov  	r4, r6									# x
-    mov  	r6, r7									# Colour
+    mov  	r17, r4									# r17 <- Start Y
+    mov  	r16, r5									# r16 <- End Y
+    mov  	r4, r6									# r4  <- X
+    mov  	r6, r7									# r6  <- Colour
     
-    1:	mov 	r5, r16
+    1:	mov 	r5, r16                             # Pixel Y <- current Y
         call 	WritePixel							# Draw one pixel
-        subi	r16, r16, 1
-        bge 	r16, r17, 1b
+        subi	r16, r16, 1                         # Decrement current Y
+        bge 	r16, r17, 1b                        # Loop if current Y >= start Y
     
     ldw 	ra,  20(sp)
     ldw 	r17, 16(sp)  
@@ -703,10 +705,10 @@ DrawVLine:
     ret
     
 	
-# r4: y1
-# r5: y2
-# r6: x
-# r7: colour value
+# r4: Start Y
+# r5: End Y
+# r6: X
+# r7: Colour value
 DrawDVLine:
 	subi 	sp, sp, 28
     stw 	r4,  0(sp)
@@ -717,18 +719,18 @@ DrawDVLine:
     stw 	r18, 20(sp)
     stw 	ra,  24(sp)
     
-    mov  	r17, r4									# y1
-    mov  	r16, r5									# y2
-    mov  	r4, r6									# x
-    mov  	r6, r7									# Colour
+    mov  	r17, r4									# r17 <- Start Y
+    mov  	r16, r5									# r16 <- End Y
+    mov  	r4, r6									# r4  <- X
+    mov  	r6, r7									# r6  <- Colour
     
-    1:	mov 	r5, r16
-    	andi	r18, r5, 1
-        bne		r18, r0, Skip_Draw_Pixel
+    1:	andi	r18, r16, 1							# r18 <- LSB of current Y
+        bne		r18, r0, Skip_Draw_Pixel			# If current Y is odd, don't draw the current pixel
+		mov 	r5, r16                             # Pixel Y <- current Y		
         call 	WritePixel							# Draw one pixel
-Skip_Draw_Pixel:
-        subi 	r16, r16, 1
-        bge 	r16, r17, 1b
+Skip_Draw_Pixel:                                    
+        subi 	r16, r16, 1                         # Decrement current Y
+        bge 	r16, r17, 1b                        # Loop if current Y >= start Y
     
     ldw 	ra,  24(sp)
     ldw 	r18, 20(sp) 
@@ -741,7 +743,7 @@ Skip_Draw_Pixel:
     ret    
 
 	
-# r4: colour
+# r4: Colour value
 FillColourFast:
 	subi 	sp, sp, 12
     stw 	r8,  0(sp)
@@ -749,36 +751,43 @@ FillColourFast:
     stw 	r10, 8(sp)
 
 .if LOG2_BYTES_PER_PIXEL == 0
-    andi 	r8, r4, 0xff
-    slli 	r9, r8, 8
-    or   	r8, r8, r9
-    slli 	r9, r8, 16
-    or   	r8, r9, r8
+	# One pixel takes up 1 byte
+	# Copy the colour stored in r4 into r8 4 times
+	# This way r8 contains 4 colour values to write at once into the vga pixel buffer
+    andi 	r8, r4, 0xff							# r8 <- LSB of r4 (1 colour value)
+    slli 	r9, r8, 8								# r9 <- LSB of r4 shifted 1 byte left
+    or   	r8, r8, r9								# r8 <- LSB of r4 in 1st byte + LSB of r4 in 0th byte
+    slli 	r9, r8, 16                              # r9 <- r8 shifted 2 bytes left
+    or   	r8, r9, r8                              # r8 <- LSB of r4 in all 4 bytes (4 colour values)
 .elseif LOG2_BYTES_PER_PIXEL == 1
-    andi 	r8, r4, 0xffff
-    slli 	r9, r8, 16
-	or   	r8, r9, r8
+	# One pixel takes up 2 bytes
+	# Copy the colour stored in r4 into r8 2 times
+	# This way r8 contains 2 colour values to write at once into the vga pixel buffer
+    andi 	r8, r4, 0xffff                          # r8 <- Last 2 bytes of r4 (1 colour value)
+    slli 	r9, r8, 16                              # r9 <- r8 shifted 2 bytes left
+	or   	r8, r9, r8                              # r8 <- Last 2 bytes of r4 both high and low order (2 colour values)
 .elseif LOG2_BYTES_PER_PIXEL == 2
-    # Don't need to do anything
+    # One pixel takes up 4 bytes
+	# Don't need to do anything
 .else
     .error "Error: Unknown pixel size"
 .endif
 	
-	movia 	r9, (BYTES_PER_ROW)*HEIGHT-4
-	movia 	r10, PIXBUF
-	add   	r9, r9, r10
+	movia 	r9, (BYTES_PER_ROW)*HEIGHT-4			# r9 <- Offset of last pixel in vga pixel buffer
+	movia 	r10, PIXBUF								# r10 <- Base address of vga pixel buffer
+	add   	r9, r9, r10								# r9 <- Address of last pixel in vga pixel buffer
 
 # This is a temporary label!! You can do this!! :)
 1:
-    stwio 	r8, 0(r9)
-    subi  	r9, r9, 4
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    bge   	r9, r10, 1b
+    stwio 	r8, 0(r9)								# Write 1, 2, or 4 pixels at once to current pixel in vga pixel buffer
+    subi  	r9, r9, 4								# Move to previous pixel
+    nop												# Wait for the vga pixel buffer hardware
+    nop												# Keep waiting ...
+    nop												# Keep waiting ...
+    nop												# Keep waiting ...
+    nop												# Keep waiting ...
+    nop												# Keep waiting ...
+    bge   	r9, r10, 1b								# Loop if current pixel address >= first pixel address
 
     ldw 	r8,  0(sp)
     ldw 	r9,  4(sp)
@@ -796,19 +805,19 @@ ClearScreen:
     stw 	r17, 16(sp)
     stw 	ra,  20(sp)
     
-    FILL_COLOR	BG_COL
+    FILL_COLOR	BG_COL								# Fill the screen with the background colour
     
-    # Two loops to draw each char
-    movi 	r16, WIDTH-1
-    1:	movi 	r17, HEIGHT-1
-        2:  mov 	r4, r16
-            mov 	r5, r17
-            mov 	r6, r0
+    # Clear the pixel buffer as well
+    movi 	r16, WIDTH-1							# r16 <- End X
+    1:	movi 	r17, HEIGHT-1						# r17 <- End Y
+        2:  mov 	r4, r16							# Char X <- current X
+            mov 	r5, r17							# Char Y <- current Y
+            mov 	r6, r0                          # Char value <- 0 (blank)
             call 	WriteChar						# Draw one char
-            subi 	r17, r17, 1
-            bge 	r17, r0, 2b
-        subi 	r16, r16, 1
-        bge 	r16, r0, 1b
+            subi 	r17, r17, 1                     # Decrement current Y
+            bge 	r17, r0, 2b                     # Loop if current Y >= 0
+        subi 	r16, r16, 1                         # Decrement current X
+        bge 	r16, r0, 1b                         # Loop if current X >= 0
     
     ldw 	ra,  20(sp)
     ldw 	r17, 16(sp)
@@ -820,20 +829,20 @@ ClearScreen:
     ret
 
 
-# r4: col
-# r5: row
-# r6: character
+# r4: Column (x)
+# r5: Row    (y)
+# r6: Character value
 WriteChar:
-	subi 	sp, sp, 12
-    stw 	r4, 0(sp)
+	subi 	sp, sp, 12								
+    stw 	r4, 0(sp)								
     stw 	r5, 4(sp)
     stw 	r6, 8(sp)
     
-	slli 	r5, r5, 7
-    add 	r5, r5, r4
-    movia 	r4, CHARBUF
-    add 	r5, r5, r4
-    stbio 	r6, 0(r5)
+	slli 	r5, r5, 7                               # r5 <- Calculated memory offset due to Y
+    add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
+    movia 	r4, CHARBUF                             # r4 <- Address of character buffer
+    add 	r5, r5, r4                              # r5 <- Calculated memory address for specified X,Y
+    stbio 	r6, 0(r5)                               # Write character to character buffer
     
     ldw 	r6, 8(sp)
     ldw 	r5, 4(sp)
@@ -842,9 +851,9 @@ WriteChar:
     ret
 
 
-# r4: col (x)
-# r5: row (y)
-# r6: colour value
+# r4: X
+# r5: Y
+# r6: Colour value
 WritePixel:
 	subi 	sp, sp, 20
     stw 	r2, 0(sp)
@@ -853,18 +862,18 @@ WritePixel:
     stw 	r5, 12(sp)
     stw 	r6, 16(sp)
     
-    slli 	r5, r5, LOG2_BYTES_PER_ROW
-    slli 	r4, r4, LOG2_BYTES_PER_PIXEL
-    add 	r5, r5, r4
-    movia 	r4, PIXBUF
-    add 	r5, r5, r4
+    slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
+    slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r5 <- Calculated memory offset due to X
+    add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
+    movia 	r4, PIXBUF                              # r4 <- Address of character buffer
+    add 	r5, r5, r4                              # r5 <- Calculated memory address for specified X,Y
     
 .if LOG2_BYTES_PER_PIXEL == 0
-  	stbio 	r6, 0(r5)								# Write 8-bit pixel
+  	stbio 	r6, 0(r5)								# Write 8-bit pixel to vga pixel buffer
 .elseif LOG2_BYTES_PER_PIXEL == 1
-    sthio 	r6, 0(r5)								# Write 16-bit pixel
+    sthio 	r6, 0(r5)								# Write 16-bit pixel to vga pixel buffer
 .elseif LOG2_BYTES_PER_PIXEL == 2
-    stwio 	r6, 0(r5)								# Write 32-bit pixel
+    stwio 	r6, 0(r5)								# Write 32-bit pixel to vga pixel buffer
 .else
     .error "Unknown pixel size"
 .endif
