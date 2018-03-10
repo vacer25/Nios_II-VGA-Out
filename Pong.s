@@ -3,7 +3,8 @@
 # TARGET_SYSTEM = 2: DE2 / DE2-115
 # TARGET_SYSTEM = 3: DE10-Lite
 
-.equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
+.equ TARGET_SYSTEM, 1					# Used to indicate which FPGA the code will be compiled for
+.equ USE_DOUBLE_BUFFERED, 1
 
 # -------------------- SCREEN DATA --------------------
 
@@ -50,7 +51,14 @@
     .equ WIN_COL,   0xFF00
 .endif
 
+.if USE_DOUBLE_BUFFERED == 0
 .equ PIXBUF, 0x08000000					# Pixel buffer.     Same on all boards.
+.else 
+.equ BUFFER_SIZE, HEIGHT * BYTES_PER_ROW
+.equ FRAMEBUFFER_A, prog_end
+.equ FRAMEBUFFER_B, FRAMEBUFFER_A + BUFFER_SIZE
+.endif
+
 .equ CHARBUF, 0x09000000				# Character buffer. Same on all boards.
 
 # -------------------- HARDWARE --------------------
@@ -236,7 +244,8 @@ TIMER_IRQ:
     
 _start:
 	movia 	sp, 0x800000				# Initial stack pointer
-	
+
+.if USE_DOUBLE_BUFFERED == 0
 	# Configure vga stuffs
 	#movia	r2, VGAPIX_CONTROL
 	#movia	r3, PIXBUF
@@ -245,7 +254,16 @@ _start:
 	#
 	#stwio	r3, 4(r2)
 	#stwio	r3, 0(r2)
-    
+.else 
+	# Initialize framebuffers to empty
+	movi	r4, 0x0000
+	call	FillColourFast
+	call	SwapBuffers
+	movi	r4, 0x0000
+	call	FillColourFast
+	call	SwapBuffers
+.endif
+	
     movi 	r16, WIDTH					# Width
     movi 	r17, HEIGHT-1				# Height
 	
@@ -293,12 +311,14 @@ _start:
     stw  	r4, SCORE_P1(r0)
     stw  	r5, SCORE_P2(r0)    
 	
+	# We don't need to clear the character buffer because it is defined
+	#    to be initialized to the space character
 	#call	ClearScreen
     
 # -------------------- LOOP --------------------
     
 Loop:
-    FILL_COLOR	BG_COL					# Clear screen
+    FILL_COLOR	BG_COL								# Clear screen
 	
 	# -------------------- TESTING CODE --------------------
 
@@ -459,14 +479,32 @@ B_Set_Y_Dir_Plus:
 Update_B_Y:
     add		r19, r19, r21							# Move the ball in the Y direction
     
-	# -------------------- DELAY --------------------
+    # -------------------- PAUSE --------------------
+    
+Pause:
+    ldwio	r8, 0(r9)								# Read switches
+    andi	r10, r8, 8								# Get switches 3 status
+    bne		r10, r0, Pause							# Branch to pause if switche 3 is on (stop looping)
+    
+    # -------------------- SWAP BUFFERS --------------------
+.if USE_DOUBLE_BUFFERED == 1
+	
+    # Instead of waiting using the timer interrupt, we're going to swap the buffers
+	# Part of swapping the buffers requires us to wait until the buffer has actually been swapped
+	# This synchronizes us so the code runs once per frame
+	call	SwapBuffers   
+    # If this point is reached, pause is not activated, so loop to draw the next frame
+	br Loop
+    
+.else
     
 Wait:
     ldw  	r4, CONTINUE_FLAG(r0)					# Load the continue flag from mem.
     beq		r4, r0, Wait							# If flag is not set, loop back and keep waiting
     movi	r4, 0									# Otherwise, clear the flag
     stw		r4, CONTINUE_FLAG(r0)					# Store the continue flag from mem.
-    br		Loop									
+    br		Loop
+.endif	
 
 	# -------------------- DISPLAY WIN TEXT --------------------
 
@@ -481,6 +519,11 @@ Print_Win_Text:
     DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*4, WIN_TEXT_Y, I_CHAR, WIN_COL
     DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*5, WIN_TEXT_Y, N_CHAR, WIN_COL
     DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, WIN_TEXT_Y, S_CHAR, WIN_COL
+    
+.if USE_DOUBLE_BUFFERED == 1
+call	SwapBuffers
+.endif
+    
 
 Wait_For_Restart_Button:
     ldwio	r8, 0(r3)								# Read buttons
@@ -497,7 +540,8 @@ End:
 CONTINUE_FLAG:	.word 	0							# Gets set by the interval timer indicating that the loop can continue
 SCORE_P1:		.word 	0							# Left player score
 SCORE_P2:		.word 	0							# Right player score
-WINNER:			.word	0							# Temporary variable to record the winning players'n number (1 or 2)
+WINNER:			.word	0							# Temporary variable to record the winning player's number (1 or 2)
+CUR_BUFFER:		.word	0							# 1 if we're currently writing to framebuffer A, 0 for buffer B
 
 # Character map holds the data for the big score characters
 # The MSB       is column 0 (left)  of the char, drawn from bottom to top
@@ -747,10 +791,12 @@ Skip_Draw_Pixel:
 	
 # r4: Colour value
 FillColourFast:
-	subi 	sp, sp, 12
-    stw 	r8,  0(sp)
-    stw 	r9,  4(sp)
-    stw 	r10, 8(sp)
+	subi 	sp, sp, 20
+    stw 	r8,   0(sp)
+    stw 	r9,   4(sp)
+    stw 	r10,  8(sp)
+    stw 	r2,  12(sp)
+    stw 	ra,  16(sp)
 
 .if LOG2_BYTES_PER_PIXEL == 0
 	# One pixel takes up 1 byte
@@ -776,7 +822,14 @@ FillColourFast:
 .endif
 	
 	movia 	r9, (BYTES_PER_ROW)*HEIGHT-4			# r9 <- Offset of last pixel in vga pixel buffer
+
+.if USE_DOUBLE_BUFFERED == 0
 	movia 	r10, PIXBUF								# r10 <- Base address of vga pixel buffer
+.else 
+	call	GetBufferPointer
+	mov		r10, r2									# r10 <- Base address of vga pixel buffer
+.endif
+	
 	add   	r9, r9, r10								# r9 <- Address of last pixel in vga pixel buffer
 
 # This is a temporary label!! You can do this!! :)
@@ -791,10 +844,12 @@ FillColourFast:
     nop												# Keep waiting ...
     bge   	r9, r10, 1b								# Loop if current pixel address >= first pixel address
 
-    ldw 	r8,  0(sp)
-    ldw 	r9,  4(sp)
-    ldw 	r10, 8(sp)
-    addi 	sp, sp, 12
+    ldw 	r8,   0(sp)
+    ldw 	r9,   4(sp)
+    ldw 	r10,  8(sp)
+    ldw 	r2,  12(sp)
+    ldw 	ra,  16(sp)
+    addi 	sp, sp, 20
     ret
 
 	
@@ -859,17 +914,25 @@ WriteChar:
 WritePixel:
 	subi 	sp, sp, 20
     stw 	r2, 0(sp)
-    stw 	r3, 4(sp)
-    stw 	r4, 8(sp)
-    stw 	r5, 12(sp)
-    stw 	r6, 16(sp)
+    stw 	r4, 4(sp)
+    stw 	r5, 8(sp)
+    stw 	r6, 12(sp)
+    stw 	ra, 16(sp)
     
+.if USE_DOUBLE_BUFFERED == 0
     slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
     slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r5 <- Calculated memory offset due to X
     add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
     movia 	r4, PIXBUF                              # r4 <- Address of character buffer
     add 	r5, r5, r4                              # r5 <- Calculated memory address for specified X,Y
-    
+.else 
+    slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
+    slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r4 <- Calculated memory offset due to X
+    add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
+    call	GetBufferPointer			# r2 <- Current buffer address
+    add 	r5, r5, r2                              # r5 <- Calculated memory address for specified X,Y
+.endif
+ 
 .if LOG2_BYTES_PER_PIXEL == 0
   	stbio 	r6, 0(r5)								# Write 8-bit pixel to vga pixel buffer
 .elseif LOG2_BYTES_PER_PIXEL == 1
@@ -880,11 +943,62 @@ WritePixel:
     .error "Error: Unknown pixel size"
 .endif
     
-    ldw 	r6, 16(sp)
-    ldw 	r5, 12(sp)
-    ldw 	r4, 8(sp)
-    ldw 	r3, 4(sp)
+    ldw 	ra, 16(sp)
+    ldw 	r6, 12(sp)
+    ldw 	r5, 8(sp)
+    ldw 	r4, 4(sp)
     ldw 	r2, 0(sp)  
     addi 	sp, sp, 20
     ret
+
+.if USE_DOUBLE_BUFFERED == 1
+
+# u16 * GetBufferPointer(void)
+# Returns a pointer to the current framebuffer
+GetBufferPointer:
+	ldb		r2, CUR_BUFFER(r0)
+	bne		r0, r2, 1f
+	movia	r2, FRAMEBUFFER_B
+	ret
+1:
+	movia	r2, FRAMEBUFFER_A
+	ret
+
+# void SwapBuffers(void)
+# Flips the current drawing buffer to screen
+SwapBuffers:
+	subi	sp, sp, 16
+	stw		ra,  0(sp)
+	stw		r2,  4(sp)
+	stw		r8,  8(sp)
+	stw		r9, 12(sp)
 	
+	call	GetBufferPointer
+	movia	r8, VGAPIX_CONTROL
+	stwio	r2, 4(r8)
+	stwio	r2, 0(r8)
+	
+	# Busy-loop until buffer is done being displayed
+1:
+	ldwio	r9, 12(r8)
+	andi	r9, r9, 1
+	bne	r0, r9, 1b
+	
+	# Swap which buffer is drawn
+	# CUR_BUFFER = (CUR_BUFFER == 0) ? 1 : 0;
+	ldb		r8, CUR_BUFFER(r0)
+	cmpeq	r8, r0, r8
+	stb		r8, CUR_BUFFER(r0)
+	
+	ldw		ra,  0(sp)
+	ldw		r2,  4(sp)
+	ldw		r8,  8(sp)
+	ldw		r9, 12(sp)
+	addi	sp, sp, 16
+	ret
+
+.endif
+
+.data
+.word 0x11223344
+prog_end:
