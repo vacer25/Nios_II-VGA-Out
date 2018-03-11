@@ -52,14 +52,15 @@
 .endif
 
 .if USE_DOUBLE_BUFFERED == 0
-.equ PIXBUF, 0x08000000					# Pixel buffer.     Same on all boards.
+.equ FRAMEBUFFER, prog_end					# Pixel buffer.     Same on all boards.
 .else 
-.equ BUFFER_SIZE, HEIGHT * BYTES_PER_ROW
+.equ FRAMEBUFFER_SIZE, HEIGHT * BYTES_PER_ROW
 .equ FRAMEBUFFER_A, prog_end
-.equ FRAMEBUFFER_B, FRAMEBUFFER_A + BUFFER_SIZE
+.equ FRAMEBUFFER_B, FRAMEBUFFER_A + FRAMEBUFFER_SIZE
 .endif
 
 .equ CHARBUF, 0x09000000				# Character buffer. Same on all boards.
+.equ CHARBUF_SIZE, 0x2000
 
 # -------------------- HARDWARE --------------------
 
@@ -246,14 +247,12 @@ _start:
 	movia 	sp, 0x800000				# Initial stack pointer
 
 .if USE_DOUBLE_BUFFERED == 0
-	# Configure vga stuffs
-	#movia	r2, VGAPIX_CONTROL
-	#movia	r3, PIXBUF
-	#stwio	r3, 4(r2)
-	#stwio	r3, 0(r2)
-	#
-	#stwio	r3, 4(r2)
-	#stwio	r3, 0(r2)
+	# Tell VGA to use our framebuffer instead of the default
+    # This is required for the non-double-buffered code to work on real hardware
+	movia	r2, VGAPIX_CONTROL
+	movia	r3, FRAMEBUFFER
+	stwio	r3, 4(r2)
+	stwio	r3, 0(r2)
 .else 
 	# Initialize framebuffers to empty
 	movi	r4, 0x0000
@@ -311,9 +310,8 @@ _start:
     stw  	r4, SCORE_P1(r0)
     stw  	r5, SCORE_P2(r0)    
 	
-	# We don't need to clear the character buffer because it is defined
-	#    to be initialized to the space character
-	#call	ClearScreen
+    # This is required in case the character buffer was in use before we started running
+	call    ClearScreenFast
     
 # -------------------- LOOP --------------------
     
@@ -323,9 +321,9 @@ Loop:
 	# -------------------- TESTING CODE --------------------
 
 /*
-asdfasdf:
+1:
     ldw  	r4, CONTINUE_FLAG(r0)
-    beq		r4, r0, asdfasdf
+    beq		r4, r0, 1b
     movi	r4, 0
     stw		r4, CONTINUE_FLAG(r0)
     br		Loop
@@ -824,7 +822,7 @@ FillColourFast:
 	movia 	r9, (BYTES_PER_ROW)*HEIGHT-4			# r9 <- Offset of last pixel in vga pixel buffer
 
 .if USE_DOUBLE_BUFFERED == 0
-	movia 	r10, PIXBUF								# r10 <- Base address of vga pixel buffer
+	movia 	r10, FRAMEBUFFER								# r10 <- Base address of vga pixel buffer
 .else 
 	call	GetBufferPointer
 	mov		r10, r2									# r10 <- Base address of vga pixel buffer
@@ -885,6 +883,28 @@ ClearScreen:
     addi 	sp, sp, 24
     ret
 
+ClearScreenFast:
+	subi 	sp, sp, 16
+    stw 	r8,   0(sp)
+    stw 	r9,   4(sp)
+    stw 	r10,  8(sp)
+    stw 	ra,  12(sp)
+    
+    movia   r8, CHARBUF
+    movia   r9, CHARBUF + CHARBUF_SIZE - 4
+    movia   r10, 0x20202020
+1:
+    stw     r10, 0(r9)
+    # maybe we have to nop here?
+    subi    r9, r9, 4
+    bge     r9, r8, 1b
+    
+    ldw 	r8,   0(sp)
+    ldw 	r9,   4(sp)
+    ldw 	r10,  8(sp)
+    ldw 	ra,  12(sp)
+    addi 	sp, sp, 16
+    ret
 
 # r4: Column (x)
 # r5: Row    (y)
@@ -923,13 +943,13 @@ WritePixel:
     slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
     slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r5 <- Calculated memory offset due to X
     add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
-    movia 	r4, PIXBUF                              # r4 <- Address of character buffer
+    movia 	r4, FRAMEBUFFER                         # r4 <- Address of character buffer
     add 	r5, r5, r4                              # r5 <- Calculated memory address for specified X,Y
 .else 
     slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
     slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r4 <- Calculated memory offset due to X
     add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
-    call	GetBufferPointer			# r2 <- Current buffer address
+    call	GetBufferPointer			            # r2 <- Current buffer address
     add 	r5, r5, r2                              # r5 <- Calculated memory address for specified X,Y
 .endif
  
@@ -1000,5 +1020,6 @@ SwapBuffers:
 .endif
 
 .data
-.word 0x11223344
+.align 4
 prog_end:
+# Data will be placed here at runtime; namely, the framebuffers
