@@ -5,7 +5,7 @@
 
 .equ TARGET_SYSTEM, 1					# Used to indicate which FPGA the code will be compiled for
 .equ USE_DOUBLE_BUFFERED, 1
-.equ USE_SNES_CONTROLLER, 0
+.equ USE_SNES_CONTROLLER, 1
 
 # -------------------- SCREEN DATA --------------------
 
@@ -302,12 +302,14 @@ _start:
     movi 	r15, 255					# Number of NOP delays
     
     movi 	r14, HEIGHT-P_HEIGHT		# Midline X coordinate in middle
-    movi	r22, HEIGHT/2-P_HEIGHT/2 	# Left paddle  Y coordinate in middle
-    movi	r23, HEIGHT/2-P_HEIGHT/2 	# Right paddle Y coordinate in middle
+	
+	# Initialize variables
     movi	r18, WIDTH/2				# Ball X coordinate in middle
     movi	r19, HEIGHT/2				# Ball Y coordinate in middle
     movi 	r20, 1						# Ball X direction
     movi 	r21, 1						# Ball Y direction
+    movi	r22, HEIGHT/2-P_HEIGHT/2 	# Left paddle  Y coordinate in middle
+    movi	r23, HEIGHT/2-P_HEIGHT/2 	# Right paddle Y coordinate in middle
     
     # Setup interval timer
     movia 	r13, TIMER_BASE_ADDR		# Internal timer base address
@@ -427,9 +429,9 @@ Check_Input:
 .if USE_SNES_CONTROLLER == 1
     READ_SNES
     andi	r10, r2, 0x0400							# Check Down (Left paddle down)
-    andi	r11, r3, 0x0800							# Check Up (Left paddle up)
-    andi	r12, r4, 0x8000							# Check B (Right paddle down)
-    andi	r13, r5, 0x0040							# Check X (Right paddle up)
+    andi	r11, r2, 0x0800							# Check Up (Left paddle up)
+    andi	r12, r2, 0x8000							# Check B (Right paddle down)
+    andi	r13, r2, 0x0040							# Check X (Right paddle up)
 .else
     ldwio	r8, 0(r9)								# Read switches
     andi	r10, r8, 256							# Check switch 8 (Left paddle down)
@@ -519,9 +521,26 @@ Update_B_Y:
     # -------------------- PAUSE --------------------
     
 Pause:
+.if USE_SNES_CONTROLLER == 1
+	ldw		r8, CONTROLLER_A_FF(r0)
+	andi	r8, r8, 0x3000							# Check if start or select is pressed
+	beq		r0, r8, 1f
+2:
+	# We need to delay because it breaks if we don't
+	# This will delay for 2 ms
+    movui	r8, 50000
+3:	subi	r8, r8, 1
+	bgtu	r8, r0, 3b
+	
+	READ_SNES
+	andi	r3, r3, 0x3000							# Loop while start or select hasn't been pressed again
+	beq		r0, r3, 2b
+1:
+.else
     ldwio	r8, 0(r9)								# Read switches
     andi	r10, r8, 8								# Get switches 3 status
     bne		r10, r0, Pause							# Branch to pause if switche 3 is on (stop looping)
+.endif
     
     # -------------------- SWAP BUFFERS --------------------
 .if USE_DOUBLE_BUFFERED == 1
@@ -558,7 +577,7 @@ Print_Win_Text:
     DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, WIN_TEXT_Y, S_CHAR, WIN_COL
     
 .if USE_DOUBLE_BUFFERED == 1
-call	SwapBuffers
+	call	SwapBuffers
 .endif
     
 
@@ -569,42 +588,9 @@ Wait_For_Restart_Button:
 	br		Wait_For_Restart_Button					# Otherwise, keep waiting for a button press
 
 End:
-    br 		End  
-    
-    
-	.data
-	.global CONTINUE_FLAG
-CONTINUE_FLAG:	.word 	0							# Gets set by the interval timer indicating that the loop can continue
-SCORE_P1:		.word 	0							# Left player score
-SCORE_P2:		.word 	0							# Right player score
-WINNER:			.word	0							# Temporary variable to record the winning player's number (1 or 2)
-CUR_BUFFER:		.word	0							# 1 if we're currently writing to framebuffer A, 0 for buffer B
+    br 		End
 
-# Character map holds the data for the big score characters
-# The MSB       is column 0 (left)  of the char, drawn from bottom to top
-# The next byte is column 1         of the char, drawn from bottom to top
-# The next byte is column 2         of the char, drawn from bottom to top
-# The LSB       is column 3 (right) of the char, drawn from bottom to top
 
-BIG_CHAR_MAP:	.word 0x3E223E00	# 0
-				.word 0x243E2000	# 1
-				.word 0x322A2400	# 2
-				.word 0x222A3E00	# 3
-				.word 0x0E083E00	# 4
-				.word 0x2E2A3A00	# 5
-				.word 0x3E2A3A00	# 6
-				.word 0x023A0600	# 7
-				.word 0x3E2A3E00	# 8
-				.word 0x2E2A3E00	# 9
-				.word 0x00000000	# [Space]
-				.word 0x3E0A0E00	# P
-				.word 0x3E103E00	# W
-				.word 0x223E2200	# I
-				.word 0x3C081E00	# N
-				.word 0x2E2A3A00	# S
-
-	.text
-    
 # -------------------- DRAWING --------------------
 
 # r4: X
@@ -1062,7 +1048,7 @@ SwapBuffers:
 # void SNESController_Initialize(void)
 # Initializes registers relevant to the SNES controller reading
 SNESController_Initialize:
-    movia   r8, SNESCONTROLLER_BASE_ADDRESS
+    movia   r8, SNESCONTROLLER_BASE_ADDR
     # set the clock and data pins to outputs, everything else to inputs
     # (for now, (clock, latch, data) are (0, 1, 2))
     movia   r9, 0x00000003
@@ -1078,9 +1064,11 @@ SNESController_Initialize:
    
     ret
 
-# u32 SNESController_Read(void)
+# R2: 16 bits of controller data
+# R3: 16 bits of controller data (first frame)
+# The values of CONTROLLER_A and CONTROLLER_A_FF are updated as well
 SNESController_Read:
-    movia   r8, SNESCONTROLLER_BASE_ADDRESS
+    movia   r8, SNESCONTROLLER_BASE_ADDR
 
     # prepare bit counter
     movi    r10, 16
@@ -1123,12 +1111,56 @@ SNESController_Read:
     # if we need to read more bits, loop
     subi    r10, r10, 1
     bgt     r10, r0, 1b
-
+	
+	# calculate first-frame-ness
+	# a button is first frame if it was not pressed last frame and is pressed this frame
+	ldw		r3, CONTROLLER_A(r0)
+	nor		r3, r3, r0
+	and		r3, r3, r2
+	stw		r3, CONTROLLER_A_FF(r0)
+	stw		r2, CONTROLLER_A(r0)
+	
+	ret
    
 .endif
 
-
 .data
+.global CONTINUE_FLAG
+CONTINUE_FLAG:		.word 	0				# Gets set by the interval timer indicating that the loop can continue
+SCORE_P1:			.word 	0				# Left player score
+SCORE_P2:			.word 	0				# Right player score
+WINNER:				.word	0				# Temporary variable to record the winning player's number (1 or 2)
+CUR_BUFFER:			.word	0				# 1 if we're currently writing to framebuffer A, 0 for buffer B
+
+.if USE_SNES_CONTROLLER == 1
+CONTROLLER_A:		.word	0				# Somewhere to store the controller values (we can't just read the controller again)
+CONTROLLER_A_FF:	.word	0				# Keeps track of when a new button is pressed
+.endif
+
+# Character map holds the data for the big score characters
+# The MSB       is column 0 (left)  of the char, drawn from bottom to top
+# The next byte is column 1         of the char, drawn from bottom to top
+# The next byte is column 2         of the char, drawn from bottom to top
+# The LSB       is column 3 (right) of the char, drawn from bottom to top
+
+BIG_CHAR_MAP:	.word 0x3E223E00	# 0
+				.word 0x243E2000	# 1
+				.word 0x322A2400	# 2
+				.word 0x222A3E00	# 3
+				.word 0x0E083E00	# 4
+				.word 0x2E2A3A00	# 5
+				.word 0x3E2A3A00	# 6
+				.word 0x023A0600	# 7
+				.word 0x3E2A3E00	# 8
+				.word 0x2E2A3E00	# 9
+				.word 0x00000000	# [Space]
+				.word 0x3E0A0E00	# P
+				.word 0x3E103E00	# W
+				.word 0x223E2200	# I
+				.word 0x3C081E00	# N
+				.word 0x2E2A3A00	# S
+
+
 .align 4
 prog_end:
 # Data will be placed here at runtime; namely, the framebuffers
