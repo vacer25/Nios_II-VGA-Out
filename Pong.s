@@ -5,6 +5,7 @@
 
 .equ TARGET_SYSTEM, 1					# Used to indicate which FPGA the code will be compiled for
 .equ USE_DOUBLE_BUFFERED, 1
+.equ USE_SNES_CONTROLLER, 0
 
 # -------------------- SCREEN DATA --------------------
 
@@ -70,12 +71,14 @@
     .equ TIMER_BASE_ADDR, 0x10002000
     .equ SWITCHES_BASE_ADDR, 0x10000040
     .equ BUTTONS_BASE_ADDR, 0x10000050
+    .equ SNESCONTROLLER_BASE_ADDR, 0x10000070
 .elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 3
     # DE1-SoC, DE10-Lite
     .equ VGAPIX_CONTROL, 0xff203020
     .equ TIMER_BASE_ADDR, 0xff202000
     .equ SWITCHES_BASE_ADDR, 0xff200040
     .equ BUTTONS_BASE_ADDR, 0xff200050
+    .equ SNESCONTROLLER_BASE_ADDR, 0xff200070
 .endif
 
 .equ TIMER_INTERVAL, 2500000
@@ -186,6 +189,30 @@
     call 	DrawPaddle
 .endm
 
+.macro  READ_SNES
+    subi    sp, sp, 4 * 8
+    stw     r8,   0(sp)
+    stw     r9,   4(sp)
+    stw     r10,  8(sp)
+    stw     r11, 12(sp)
+    stw     r12, 16(sp)
+    stw     r13, 20(sp)
+    stw     r14, 24(sp)
+    stw     r15, 28(sp)
+
+    call    SNESController_Read
+
+    ldw     r8,   0(sp)
+    ldw     r9,   4(sp)
+    ldw     r10,  8(sp)
+    ldw     r11, 12(sp)
+    ldw     r12, 16(sp)
+    ldw     r13, 20(sp)
+    ldw     r14, 24(sp)
+    ldw     r15, 28(sp)
+    addi    sp, sp, 4 * 8
+.endm
+
 # -------------------- INTERRUPTS --------------------
     .text
 	.org	0x20
@@ -261,6 +288,10 @@ _start:
 	movi	r4, 0x0000
 	call	FillColourFast
 	call	SwapBuffers
+.endif
+
+.if USE_SNES_CONTROLLER == 1
+    call    SNESController_Initialize
 .endif
 	
     movi 	r16, WIDTH					# Width
@@ -393,11 +424,19 @@ P2_WINS:
 	# -------------------- INPUTS --------------------
    
 Check_Input:
+.if USE_SNES_CONTROLLER == 1
+    READ_SNES
+    andi	r10, r2, 0x0400							# Check Down (Left paddle down)
+    andi	r11, r3, 0x0800							# Check Up (Left paddle up)
+    andi	r12, r4, 0x8000							# Check B (Right paddle down)
+    andi	r13, r5, 0x0040							# Check X (Right paddle up)
+.else
     ldwio	r8, 0(r9)								# Read switches
     andi	r10, r8, 256							# Check switch 8 (Left paddle down)
     andi	r11, r8, 512							# Check switch 9 (Left paddle up)
     andi	r12, r8, 1								# Check switch 1 (Right paddle down)
     andi	r13, r8, 2								# Check switch 2 (Right paddle up)
+.endif
     
 	# -------------------- PADDLE MOVEMENT --------------------
     
@@ -1018,6 +1057,76 @@ SwapBuffers:
 	ret
 
 .endif
+
+.if USE_SNES_CONTROLLER == 1
+# void SNESController_Initialize(void)
+# Initializes registers relevant to the SNES controller reading
+SNESController_Initialize:
+    movia   r8, SNESCONTROLLER_BASE_ADDRESS
+    # set the clock and data pins to outputs, everything else to inputs
+    # (for now, (clock, latch, data) are (0, 1, 2))
+    movia   r9, 0x00000003
+    stwio   r9, 4(r8) # direction register
+   
+    # set clock high, latch low
+    movia   r9, 0x00000001
+    stwio   r9, 0(r8) # i/o reg
+   
+    # disable interrupts on parallel port
+    stwio   r0, 8(r8) # intmask reg
+    stwio   r0, 12(r8) # intmask reg
+   
+    ret
+
+# u32 SNESController_Read(void)
+SNESController_Read:
+    movia   r8, SNESCONTROLLER_BASE_ADDRESS
+
+    # prepare bit counter
+    movi    r10, 16
+
+    # prepare output register
+    mov     r2, r0
+
+    # set latch high
+    movia   r9, 0x00000003
+    stwio   r9, 0(r8)
+
+    # set latch low
+    andi    r9, r9, 1
+1:
+    # delay
+    movui   r11, 10
+2:  subi    r11, r11, 1
+    bge     r11, r0, 2b
+
+    # set clock low
+    andi    r9, r9, 0xfffe
+    stwio   r9, 0(r8)
+
+    # read data bit
+    ldwio   r12, 0(r8)
+    slli    r2, r2, 1
+    andi    r12, r12, 4
+    cmpeq   r12, r12, r0
+    or      r2, r2, r12
+
+    # delay
+    movui   r11, 10
+2:  subi    r11, r11, 1
+    bge     r11, r0, 2b
+
+    # set clock high
+    ori     r9, r9, 1
+    stwio   r9, 0(r8)
+
+    # if we need to read more bits, loop
+    subi    r10, r10, 1
+    bgt     r10, r0, 1b
+
+   
+.endif
+
 
 .data
 .align 4
