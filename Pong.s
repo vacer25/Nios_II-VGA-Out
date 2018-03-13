@@ -3,9 +3,9 @@
 # TARGET_SYSTEM = 2: DE2 / DE2-115
 # TARGET_SYSTEM = 3: DE10-Lite
 
-.equ TARGET_SYSTEM, 1					# Used to indicate which FPGA the code will be compiled for
+.equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
 .equ USE_DOUBLE_BUFFERED, 1
-.equ USE_SNES_CONTROLLER, 1
+.equ USE_SNES_CONTROLLER, 0
 
 # -------------------- SCREEN DATA --------------------
 
@@ -42,6 +42,7 @@
     .equ MID_COL,	0xFF
     .equ CHAR_COL, 	0xFF
     .equ WIN_COL,   0xF0
+    .equ PAUSED_COL,0xF0
 .elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 2
     # 16-bit colours: DE1-SoC, DE2, DE2-115
     .equ BG_COL, 	0x0000
@@ -50,6 +51,7 @@
     .equ MID_COL,	0xFFFF
     .equ CHAR_COL, 	0xFFFF
     .equ WIN_COL,   0xFF00
+	.equ PAUSED_COL,0xFF00
 .endif
 
 .if USE_DOUBLE_BUFFERED == 0
@@ -60,7 +62,7 @@
 .equ FRAMEBUFFER_B, FRAMEBUFFER_A + FRAMEBUFFER_SIZE
 .endif
 
-.equ CHARBUF, 0x09000000				# Character buffer. Same on all boards.
+.equ CHARBUF, 0x09000000					# Character buffer. Same on all boards.
 .equ CHARBUF_SIZE, 0x2000
 
 # -------------------- HARDWARE --------------------
@@ -85,22 +87,25 @@
 
 # -------------------- DATA --------------------
 
-.equ CHAR_WIDTH, 3						# Character width
-.equ CHAR_HEIGHT, 6						# Character height
-
-.equ P_WIDTH, 2							# paddle width
-.equ P_HEIGHT, 10						# paddle height
-
-.equ P1_X, 3							# Left  paddle X coordinate
-.equ P2_X, WIDTH-3-P_WIDTH				# Right paddle X coordinate
-
-.equ SCORE_TO_WIN, 	9					# Score reqired to win
-.equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3	# Left  score X coordinate
-.equ SCORE_2_X, WIDTH/2+CHAR_WIDTH*2+1	# Right score X coordinate
-.equ SCORE_Y,	4						# Score number lables Y coordinate
-
-.equ WIN_TEXT_X, WIDTH/2-CHAR_WIDTH*4-1	# Win text lable X coordinate
-.equ WIN_TEXT_Y, HEIGHT/2-CHAR_HEIGHT+1 # Win text lable Y coordinate
+.equ CHAR_WIDTH, 3								# Character width
+.equ CHAR_HEIGHT, 6								# Character height
+.equ CHAR_BEGIN_Y, 1							# First non-empty row in the character
+		
+.equ P_WIDTH, 2									# paddle width
+.equ P_HEIGHT, 10								# paddle height
+		
+.equ P1_X, 3									# Left  paddle X coordinate
+.equ P2_X, WIDTH-3-P_WIDTH						# Right paddle X coordinate
+		
+.equ SCORE_TO_WIN, 	9							# Score reqired to win
+.equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3			# Left  score X coordinate
+.equ SCORE_2_X, WIDTH/2+CHAR_WIDTH*2+1			# Right score X coordinate
+.equ SCORE_Y,	4								# Score number lables Y coordinate
+		
+.equ TEXT_Y, HEIGHT/2-CHAR_HEIGHT+1 			# All text lables Y coordinate
+.equ WIN_TEXT_X, WIDTH/2-CHAR_WIDTH*4-1			# Win text lable X coordinate (7 characters long)
+.equ PAUSED_TEXT_X, WIDTH/2-CHAR_WIDTH*4+1		# Paused text lable X coordinate
+.equ PRESS_START_TEXT_X, WIDTH/2-CHAR_WIDTH*6-1	# Press start text lable X coordinate
 
 # Character numbers in the character map
 
@@ -115,6 +120,7 @@
 .equ E_CHAR,	18
 .equ T_CHAR,	19
 .equ R_CHAR,	20
+.equ D_CHAR,	21
 
 # Register usage:
 
@@ -169,7 +175,7 @@
 	movi	r5, \y
     mov 	r6, \char
     movui	r7, \col
-    call 	DrawBigNumber
+    call 	DrawBigChar
 .endm
 
 .macro	DRAW_BIG_CHAR_CONST	x, y, char, col
@@ -177,13 +183,20 @@
 	movi	r5, \y
     movi 	r6, \char
     movui	r7, \col
-    call 	DrawBigNumber
+    call 	DrawBigChar
 .endm
 
 .macro	DRAW_PIXEL	x, y, col
 	mov		r4, \x
 	mov		r5, \y
     mov		r6, \col
+    call 	WritePixel
+.endm
+
+.macro	DRAW_PIXEL_CONST_COL	x, y, col
+	mov		r4, \x
+	mov		r5, \y
+    movui	r6, \col
     call 	WritePixel
 .endm
 
@@ -354,7 +367,6 @@ _start:
 # -------------------- LOOP --------------------
     
 Loop:
-    FILL_COLOR	BG_COL								# Clear screen
 	
 	# -------------------- TESTING CODE --------------------
 
@@ -390,18 +402,8 @@ Loop:
     
     # -------------------- DRAWING --------------------
     
-    DRAW_PADDLE 	P1_X, r22, P_COL				# Draw left paddle
-    DRAW_PADDLE 	P2_X, r23, P_COL				# Draw right paddle
-    
-   	DV_LINE	0, HEIGHT, WIDTH/2, MID_COL				# Draw midline
-    
-    ldw		r11, SCORE_P1(r0)						# Load left score
-    ldw		r12, SCORE_P2(r0)						# Load right score
-    DRAW_BIG_CHAR SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Draw left score
-    DRAW_BIG_CHAR SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Draw right score
-    
-    movui		r6, B_COL
-    DRAW_PIXEL 	r18, r19, r6						# Ball
+    FILL_COLOR	BG_COL								# Clear screen
+    call 	DrawScreen
     
     # -------------------- CHECK WIN --------------------
     
@@ -530,6 +532,9 @@ Pause:
 	ldw		r8, CONTROLLER_A_FF(r0)
 	andi	r8, r8, 0x3000							# Check if start or select is pressed
 	beq		r0, r8, 1f
+	
+	# TODO: call fill color, call PrintPauseText, and call DrawScreen somewhere in here (probably on this line)
+	
 2:
 	# We need to delay because it breaks if we don't
 	# This will delay for 2 ms
@@ -544,7 +549,15 @@ Pause:
 .else
     ldwio	r8, 0(r9)								# Read switches
     andi	r10, r8, 8								# Get switches 3 status
-    bne		r10, r0, Pause							# Branch to pause if switche 3 is on (stop looping)
+	beq		r10, r0, 1f								# Skip drawing pause text if button not pressed
+    FILL_COLOR	BG_COL								# Clear screen
+	call 	DrawScreen
+	call	PrintPauseText
+.if USE_DOUBLE_BUFFERED == 1
+	call	SwapBuffers
+.endif
+1:	
+    bne		r10, r0, Pause							# Branch to pause if switch 3 is on (stop looping)
 .endif
     
     # -------------------- SWAP BUFFERS --------------------
@@ -565,6 +578,7 @@ Wait:
     movi	r4, 0									# Otherwise, clear the flag
     stw		r4, CONTINUE_FLAG(r0)					# Store the continue flag from mem.
     br		Loop
+	
 .endif	
 
 	# -------------------- DISPLAY WIN TEXT --------------------
@@ -573,13 +587,13 @@ Print_Win_Text:
 	ldw		r2, WINNER(r0)							# Load winner from mem.
     
 	# Draw the "PX Wins" where X is the winner number (1 or 2)
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*0, WIN_TEXT_Y, P_CHAR, WIN_COL
-    DRAW_BIG_CHAR			WIN_TEXT_X+(CHAR_WIDTH+1)*1, WIN_TEXT_Y, r2, WIN_COL
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*2, WIN_TEXT_Y, SPACE_CHAR, WIN_COL
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*3, WIN_TEXT_Y, W_CHAR, WIN_COL
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*4, WIN_TEXT_Y, I_CHAR, WIN_COL
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*5, WIN_TEXT_Y, N_CHAR, WIN_COL
-    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, WIN_TEXT_Y, S_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*0, TEXT_Y, P_CHAR, WIN_COL
+    DRAW_BIG_CHAR			WIN_TEXT_X+(CHAR_WIDTH+1)*1, TEXT_Y, r2, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*2, TEXT_Y, SPACE_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*3, TEXT_Y, W_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*4, TEXT_Y, I_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*5, TEXT_Y, N_CHAR, WIN_COL
+    DRAW_BIG_CHAR_CONST	WIN_TEXT_X+(CHAR_WIDTH+1)*6, TEXT_Y, S_CHAR, WIN_COL
     
 .if USE_DOUBLE_BUFFERED == 1
 	call	SwapBuffers
@@ -598,27 +612,64 @@ End:
 
 # -------------------- DRAWING --------------------
 
+DrawScreen:
+	subi 	sp, sp, 4
+    stw 	ra,  0(sp)
+	
+	DRAW_PADDLE 	P1_X, r22, P_COL				# Draw left paddle
+    DRAW_PADDLE 	P2_X, r23, P_COL				# Draw right paddle
+    
+   	DV_LINE	0, HEIGHT, WIDTH/2, MID_COL				# Draw midline
+    
+    ldw		r11, SCORE_P1(r0)						# Load left score
+    ldw		r12, SCORE_P2(r0)						# Load right score
+    DRAW_BIG_CHAR SCORE_1_X, SCORE_Y, r11, CHAR_COL	# Draw left score
+    DRAW_BIG_CHAR SCORE_2_X, SCORE_Y, r12, CHAR_COL	# Draw right score
+    
+    DRAW_PIXEL_CONST_COL	r18, r19, B_COL			# Ball
+
+	ldw 	ra,  0(sp)
+    addi 	sp, sp, 4
+	ret
+
+PrintPauseText:
+	subi 	sp, sp, 4
+    stw 	ra,  0(sp)
+	
+	DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*0, TEXT_Y, P_CHAR, PAUSED_COL
+    DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*1, TEXT_Y, A_CHAR, PAUSED_COL
+    DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*2, TEXT_Y, U_CHAR, PAUSED_COL
+    DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*3, TEXT_Y, S_CHAR, PAUSED_COL
+    DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*4, TEXT_Y, E_CHAR, PAUSED_COL
+	DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*5, TEXT_Y, D_CHAR, PAUSED_COL
+	
+    ldw 	ra,  0(sp)  
+    addi 	sp, sp, 4
+	ret
+
 # r4: X
 # r5: Y
 # r6: Character number in character map
 # r7: Colour value
-DrawBigNumber:
-	subi 	sp, sp, 44
+DrawBigChar:
+	subi 	sp, sp, 4*12
     stw 	r4,  0(sp)
     stw 	r5,  4(sp)
-    stw 	r14, 8(sp)
-    stw 	r15, 12(sp)
-    stw 	r16, 16(sp)
-    stw 	r17, 20(sp)
-    stw 	r18, 24(sp)
-    stw 	r19, 28(sp)
-    stw 	r20, 32(sp)
-    stw 	r21, 36(sp)
-    stw 	ra,  40(sp)
+    stw 	r13, 8(sp)
+    stw 	r14, 12(sp)
+    stw 	r15, 16(sp)
+    stw 	r16, 20(sp)
+    stw 	r17, 24(sp)
+    stw 	r18, 28(sp)
+    stw 	r19, 32(sp)
+    stw 	r20, 36(sp)
+    stw 	r21, 40(sp)
+    stw 	ra,  44(sp)
     
     mov 	r14, r4									# r14 <- Start X
     movi	r18, CHAR_HEIGHT
-    movi	r16, CHAR_WIDTH-1
+    movi	r13, CHAR_BEGIN_Y
+    movi	r16, CHAR_WIDTH
     
     movi	r21, BG_COL
     
@@ -630,11 +681,12 @@ DrawBigNumber:
     
     # Two loops to draw the big char
 	LoopX:  
-    	movi 	r17, 7								# Reset current Y to 7
+    	movi 	r17, 7								# Reset current Y counter to 7
     	ldw 	r15, 4(sp) 							# r15 <- Start Y
         addi	r15, r15, 8							# Add 8 to start Y to begin drawing from bottom
 		LoopY:  			
-        	bge		r17, r18, Skip_Draw				# If current Y counter > Char weight, skip draw
+        	bge		r17, r18, Skip_Draw				# If current Y counter >= char height, skip draw
+        	blt		r17, r13, Skip_Draw				# If current Y counter < char begin y, skip draw
 			and		r5, r19, r20					# Check if current bit is set
             beq		r5, r0, Draw_BG_Col				# If current bit is 0, draw the background colour
             DRAW_PIXEL	r14, r15, r7				# Draw the pixel in the specified colour
@@ -650,18 +702,19 @@ DrawBigNumber:
         subi 	r16, r16, 1							# Decrement X counter
         bge 	r16, r0, LoopX						# Loop if X counter >= 0
     
-    ldw 	ra,  40(sp)
-    ldw 	r21, 36(sp)
-    ldw 	r20, 32(sp)
-    ldw 	r19, 28(sp)
-    ldw 	r18, 24(sp)
-    ldw 	r17, 20(sp)
-    ldw 	r16, 16(sp)
-    ldw 	r15, 12(sp)
-    ldw 	r14, 8(sp) 
+    ldw 	ra,  44(sp)
+    ldw 	r21, 40(sp)
+    ldw 	r20, 36(sp)
+    ldw 	r19, 32(sp)
+    ldw 	r18, 28(sp)
+    ldw 	r17, 24(sp)
+    ldw 	r16, 20(sp)
+    ldw 	r15, 16(sp)
+    ldw 	r14, 12(sp) 
+    stw 	r13, 8(sp)
     ldw 	r5,  4(sp)
     ldw 	r4,  0(sp)  
-    addi 	sp, sp, 44
+    addi 	sp, sp, 4*12
     ret
   
   
@@ -1169,7 +1222,7 @@ BIG_CHAR_MAP:	.word 0x3E223E00	# 0
 				.word 0x3E2A2200	# E
 				.word 0x023E0200	# T
 				.word 0x3E0A3400	# R
-
+				.word 0x3e221c00	# D
 
 .align 4
 prog_end:
