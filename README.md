@@ -9,6 +9,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	- Basic two player implementation
 	- Switches 9/8 used to control left paddle, 1/0 for right paddle
 	- With SNES controller support, Up/Down control left paddle and X/B control right paddle
+	- Switch 3 is used to pause the game
 	- Button 0 is used to restart the game
 	- First player to reach a score of 9 wins
 	
