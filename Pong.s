@@ -110,6 +110,11 @@
 .equ I_CHAR,	13
 .equ N_CHAR,	14
 .equ S_CHAR,	15
+.equ A_CHAR,	16
+.equ U_CHAR,	17
+.equ E_CHAR,	18
+.equ T_CHAR,	19
+.equ R_CHAR,	20
 
 # Register usage:
 
@@ -1159,6 +1164,11 @@ BIG_CHAR_MAP:	.word 0x3E223E00	# 0
 				.word 0x223E2200	# I
 				.word 0x3C081E00	# N
 				.word 0x2E2A3A00	# S
+				.word 0x3E0A3E00	# A
+				.word 0x3E203E00	# U
+				.word 0x3E2A2200	# E
+				.word 0x023E0200	# T
+				.word 0x3E0A3400	# R
 
 
 .align 4
