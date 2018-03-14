@@ -4,11 +4,7 @@ Various VGA video output projects on the NIOS II processor, written in assembly.
 The programs are designed to be compatible with Altera DE0, DE1-SoC, DE2 / DE2-115, and DE10-Lite FPGA boards.  
 So far, the code has only been tested on the DE1-SoC board and is confirmed to be working.
 
----
-
 ## [Simulator website](https://cpulator.01xz.net/?sys=nios-de0)
-
-----
 
 ## Projects so far:                                         
 1. **Pong**
