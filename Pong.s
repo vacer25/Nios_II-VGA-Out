@@ -42,6 +42,7 @@
     .equ MID_COL,	0xFF
     .equ CHAR_COL, 	0xFF
     .equ WIN_COL,   0xF0
+    .equ START_COL,	0xF0
     .equ PAUSED_COL,0xF0
 .elseif TARGET_SYSTEM == 1 || TARGET_SYSTEM == 2
     # 16-bit colours: DE1-SoC, DE2, DE2-115
@@ -51,6 +52,7 @@
     .equ MID_COL,	0xFFFF
     .equ CHAR_COL, 	0xFFFF
     .equ WIN_COL,   0xFF00
+	.equ START_COL,	0xFF00
 	.equ PAUSED_COL,0xFF00
 .endif
 
@@ -87,25 +89,25 @@
 
 # -------------------- DATA --------------------
 
-.equ CHAR_WIDTH, 3								# Character width
-.equ CHAR_HEIGHT, 6								# Character height
-.equ CHAR_BEGIN_Y, 1							# First non-empty row in the character
+.equ CHAR_WIDTH, 3							# Character width
+.equ CHAR_HEIGHT, 6							# Character height
+.equ CHAR_BEGIN_Y, 1						# First non-empty row in the character
 		
-.equ P_WIDTH, 2									# paddle width
-.equ P_HEIGHT, 10								# paddle height
+.equ P_WIDTH, 2								# paddle width
+.equ P_HEIGHT, 10							# paddle height
 		
-.equ P1_X, 3									# Left  paddle X coordinate
-.equ P2_X, WIDTH-3-P_WIDTH						# Right paddle X coordinate
+.equ P1_X, 3								# Left  paddle X coordinate
+.equ P2_X, WIDTH-3-P_WIDTH					# Right paddle X coordinate
 		
-.equ SCORE_TO_WIN, 	9							# Score reqired to win
-.equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3			# Left  score X coordinate
-.equ SCORE_2_X, WIDTH/2+CHAR_WIDTH*2+1			# Right score X coordinate
-.equ SCORE_Y,	4								# Score number lables Y coordinate
+.equ SCORE_TO_WIN, 	9						# Score reqired to win
+.equ SCORE_1_X, WIDTH/2-CHAR_WIDTH*3		# Left  score X coordinate
+.equ SCORE_2_X, WIDTH/2+CHAR_WIDTH*2+1		# Right score X coordinate
+.equ SCORE_Y,	4							# Score number lables Y coordinate
 		
-.equ TEXT_Y, HEIGHT/2-CHAR_HEIGHT+1 			# All text lables Y coordinate
-.equ WIN_TEXT_X, WIDTH/2-CHAR_WIDTH*4-1			# Win text lable X coordinate (7 characters long)
-.equ PAUSED_TEXT_X, WIDTH/2-CHAR_WIDTH*4+1		# Paused text lable X coordinate
-.equ PRESS_START_TEXT_X, WIDTH/2-CHAR_WIDTH*6-1	# Press start text lable X coordinate
+.equ TEXT_Y, HEIGHT/2-CHAR_HEIGHT+1 		# All text lables Y coordinate
+.equ WIN_TEXT_X, WIDTH/2-CHAR_WIDTH*4-1		# Win text lable X coordinate (7 characters long)
+.equ PAUSED_TEXT_X, WIDTH/2-CHAR_WIDTH*4+1	# Paused text lable X coordinate
+.equ START_TEXT_X, WIDTH/2-CHAR_WIDTH*7		# Press start text lable X coordinate
 
 # Character numbers in the character map
 
@@ -229,6 +231,16 @@
     ldw     r14, 24(sp)
     ldw     r15, 28(sp)
     addi    sp, sp, 4 * 8
+.endm
+
+.macro  READ_BUTTONS
+    subi    sp, sp, 4
+    stw     r8,   0(sp)
+
+    call    Buttons_Read
+
+    ldw     r8,   0(sp)
+    addi    sp, sp, 4
 .endm
 
 # -------------------- INTERRUPTS --------------------
@@ -363,6 +375,37 @@ _start:
 	
     # This is required in case the character buffer was in use before we started running
 	call    ClearScreenFast
+	
+	# -------------------- START MESSAGE --------------------
+    
+	FILL_COLOR	BG_COL								# Clear screen
+	call 	DrawScreen
+	call	PrintStartText
+.if USE_DOUBLE_BUFFERED == 1
+	call	SwapBuffers
+.endif
+	
+WaitForStart:
+.if USE_SNES_CONTROLLER == 1
+	# TODO: test this press start code for the SNES controller
+
+	# We need to delay because it breaks if we don't
+	# This will delay for 2 ms
+    movui	r8, 50000
+3:	subi	r8, r8, 1
+	bgtu	r8, r0, 3b
+		
+	READ_SNES										# Read controller
+	andi	r3, r3, 0x1000							# Get start button status (first frame)
+	bne		r3, r0, Loop							# Branch to Loop if start button is pressed
+    br		WaitForStart							# Keep waiting otherwise
+1:
+.else
+    READ_BUTTONS									# Read buttons
+    andi	r3, r3, 1								# Get button 0 status (first frame)
+    bne		r3, r0, Loop							# Branch to Loop if button is pressed
+    br		WaitForStart							# Keep waiting otherwise
+.endif
     
 # -------------------- LOOP --------------------
     
@@ -600,10 +643,13 @@ Print_Win_Text:
 .endif
     
 
-Wait_For_Restart_Button:
-    ldwio	r8, 0(r3)								# Read buttons
-    andi	r10, r8, 1								# Get button 0 status
-    bne		r10, r0, _start							# Branch to start if button is pressed
+Wait_For_Restart_Button:	
+
+	# TODO: add code for restarting with controller by pressing start
+					
+    READ_BUTTONS									# Read buttons
+    andi	r3, r3, 1								# Get button 0 status (first frame)
+    bne		r3, r0, _start							# Branch to start if button is pressed
 	br		Wait_For_Restart_Button					# Otherwise, keep waiting for a button press
 
 End:
@@ -642,6 +688,26 @@ PrintPauseText:
     DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*3, TEXT_Y, S_CHAR, PAUSED_COL
     DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*4, TEXT_Y, E_CHAR, PAUSED_COL
 	DRAW_BIG_CHAR_CONST	PAUSED_TEXT_X+(CHAR_WIDTH+1)*5, TEXT_Y, D_CHAR, PAUSED_COL
+	
+    ldw 	ra,  0(sp)  
+    addi 	sp, sp, 4
+	ret
+	
+PrintStartText:
+	subi 	sp, sp, 4
+    stw 	ra,  0(sp)
+	
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*0, 	TEXT_Y, P_CHAR, START_COL
+    DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*1, 	TEXT_Y, R_CHAR, START_COL
+    DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*2, 	TEXT_Y, E_CHAR, START_COL
+    DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*3, 	TEXT_Y, S_CHAR, START_COL
+    DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*4, 	TEXT_Y, S_CHAR, START_COL
+	#DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*5, 	TEXT_Y, SPACE_CHAR, START_COL
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*6, 	TEXT_Y, S_CHAR, START_COL
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*7, 	TEXT_Y, T_CHAR, START_COL
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*8, 	TEXT_Y, A_CHAR, START_COL
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*9, 	TEXT_Y, R_CHAR, START_COL
+	DRAW_BIG_CHAR_CONST	START_TEXT_X+(CHAR_WIDTH+1)*10, TEXT_Y, T_CHAR, START_COL
 	
     ldw 	ra,  0(sp)  
     addi 	sp, sp, 4
@@ -1122,8 +1188,8 @@ SNESController_Initialize:
    
     ret
 
-# R2: 16 bits of controller data
-# R3: 16 bits of controller data (first frame)
+# r2: 16 bits of controller data
+# r3: 16 bits of controller data (first frame)
 # The values of CONTROLLER_A and CONTROLLER_A_FF are updated as well
 SNESController_Read:
     movia   r8, SNESCONTROLLER_BASE_ADDR
@@ -1180,6 +1246,27 @@ SNESController_Read:
 	
 	ret
    
+.else
+	
+# r2: 32 bits of button data
+# r3: 32 bits of button data (first frame)
+# The values of BUTTON_STATUS and BUTTON_STATUS_FF are updated as well
+Buttons_Read:
+    movia   r8, BUTTONS_BASE_ADDR
+	
+	# Read buttons
+	ldwio	r2, 0(r8)								
+	
+	# calculate first-frame-ness
+	# a button is first frame if it was not pressed last frame and is pressed this frame
+	ldw		r3, BUTTON_STATUS(r0)
+	nor		r3, r3, r0
+	and		r3, r3, r2
+	stw		r3, BUTTON_STATUS_FF(r0)
+	stw		r2, BUTTON_STATUS(r0)
+	
+	ret
+   
 .endif
 
 .data
@@ -1193,6 +1280,9 @@ CUR_BUFFER:			.word	0				# 1 if we're currently writing to framebuffer A, 0 for 
 .if USE_SNES_CONTROLLER == 1
 CONTROLLER_A:		.word	0				# Somewhere to store the controller values (we can't just read the controller again)
 CONTROLLER_A_FF:	.word	0				# Keeps track of when a new button is pressed
+.else
+BUTTON_STATUS:		.word 	0				# Somewhere to store the buttons values
+BUTTON_STATUS_FF:	.word	0				# Keeps track of when a new button is pressed
 .endif
 
 # Character map holds the data for the big score characters
