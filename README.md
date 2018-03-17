@@ -22,13 +22,13 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	<img src="Pong/Screenshots/Win.png" alt="Start" style="width: 500px;"/>
 	
 ## Todo:
-1. ~~Figure out double buffering~~
+1. [x] Figure out double buffering (done on 2018-03-09)
 	- Done
-1. Implement some form of randomness (starting ball directions, etc...)
-1. Make the score numbers the same size on different display sizes
-1. Make the ball speed constant on all display sizes
+1. [ ] Implement some form of randomness (starting ball directions, etc...)
+1. [ ] Make the score numbers the same size on different display sizes
+1. [ ] Make the ball speed constant on all display sizes
 	- In progress
-1. Interface with the SNES controller
-	- Working with one controller as of 2018-03-11
-	- Two controller support in progress
-1. Add Pong AI
+1. [x] Interface with one SNES controller (done on 2018-03-11)
+1. [ ] Interface with two SNES controllers
+	- In progress
+1. [ ] Add Pong AI
