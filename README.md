@@ -8,8 +8,8 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 
 ## Projects so far:                                         
 * **Pong**  
-	- Two player implementation
-	- Switches 9/8 control left paddle and 1/0 control for right paddle
+	- Basic two player implementation
+	- Switches 9/8 control left paddle and 1/0 control right paddle
 	- With SNES controller support, Up/Down control left paddle and X/B control right paddle
 	- Switch 3 is used to pause the game
 	- Button 0 is used to restart the game
