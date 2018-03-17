@@ -23,7 +23,6 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	
 ## Todo:
 1. [x] Figure out double buffering (done on 2018-03-09)
-	- Done
 1. [ ] Implement some form of randomness (starting ball directions, etc...)
 1. [ ] Make the score numbers the same size on different display sizes
 1. [ ] Make the ball speed constant on all display sizes
