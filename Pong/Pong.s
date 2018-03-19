@@ -5,10 +5,10 @@
 
 .equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
 .equ USE_DOUBLE_BUFFERED, 1
-.equ USE_SNES_CONTROLLER, 1
-.equ NUM_CONTROLLERS, 2
+.equ USE_SNES_CONTROLLER, 0
+.equ NUM_CONTROLLERS, 1
 
-.equ DEBUG_DUPLICATE_C1_DATA_TO_C2, 1
+.equ DEBUG_DUPLICATE_C1_DATA_TO_C2, 0
 
 # -------------------- SCREEN DATA --------------------
 
@@ -585,8 +585,6 @@ Pause:
     or      r8, r2, r8
 .endif
 	beq		r0, r8, 1f
-	
-	# TODO: call fill color, call PrintPauseText, and call DrawScreen somewhere in here (probably on this line)
 	
     FILL_COLOR	BG_COL								# Clear screen
 	call 	DrawScreen

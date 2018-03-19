@@ -13,6 +13,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	- Switch 3 is used to pause the game
 	- Button 0 is used to restart the game
 	- With SNES controller support, Up/Down control left paddle, X/B control right paddle, and Start / Select start, pause, and restart the game
+	- With two SNES controllers, Up/Down on a controller controls that player's paddle, and both players must press Start / Select to start the game
 	- First player to reach a score of 9 wins
 	
 	<br>
@@ -29,6 +30,5 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 1. [ ] Make the ball speed constant on all display sizes
 	- In progress
 1. [x] Interface with one SNES controller (done on 2018-03-11)
-1. [ ] Interface with two SNES controllers
-	- In progress
+1. [x] Interface with two SNES controllers (done on 2018-03-19)
 1. [ ] Add Pong AI
