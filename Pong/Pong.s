@@ -243,6 +243,10 @@
     addi    sp, sp, 4
 .endm
 
+.macro  GET_RANDOM_NUM
+    call    GenerateRandomNumber
+.endm
+
 # -------------------- INTERRUPTS --------------------
     .text
 	.org	0x20
@@ -386,6 +390,10 @@ _start:
 .endif
 	
 WaitForStart:
+    # Advance the RNG
+    # This way, we will get different random values depending on when they start the game
+    GET_RANDOM_NUM
+
 .if USE_SNES_CONTROLLER == 1
 	# TODO: test this press start code for the SNES controller
 
@@ -1269,6 +1277,60 @@ Buttons_Read:
    
 .endif
 
+
+# Taken from https://en.wikipedia.org/wiki/Xorshift
+GenerateRandomNumber:
+    subi    sp, sp, 4*3
+    stw     r21, 4*0(sp)
+    stw     r22, 4*1(sp)
+    stw     r23, 4*2(sp)
+
+    # r2: output/temp, r21: state ptr, r22: s, r23: t
+    movia   r21, RNGState
+
+#     uint32_t s, t = state[3];
+    ldw     r23, 4*3(r21)
+
+#     t ^= t >> 2;
+    srli    r2, r23, 2
+    xor     r23, r2, r23
+
+#     t ^= t << 1;
+    slli    r2, r23, 1
+    xor     r23, r2, r23
+
+#     state[3] = state[2]; state[2] = state[1]; state[1] = s = state[0];
+    ldw     r2, 4*2(r21)
+    stw     r2, 4*3(r21)
+    ldw     r2, 4*1(r21)
+    stw     r2, 4*2(r21)
+    ldw     r22, 4*0(r21)
+    stw     r22, 4*1(r21)
+
+#     t ^= s;
+    xor     r23, r22, r23
+
+#     t ^= s << 4;
+    slli    r2, r22, 4
+    xor     r23, r2, r23
+
+#     state[0] = t;
+    stw     r23, 4*0(r21)
+
+#     return t + (state[4] += 362437);
+    # we don't care about s anymore, so we can use r22 as a temp. reg
+    ldw     r2, 4*4(r21)
+    movia   r22, 362437
+    add     r2, r2, r22
+    stw     r2, 4*4(r21)
+    add     r2, r2, r23
+    
+    ldw     r21, 4*0(sp)
+    ldw     r22, 4*1(sp)
+    ldw     r23, 4*2(sp)
+    addi    sp, sp, 4*3
+    ret
+
 .data
 .global CONTINUE_FLAG
 CONTINUE_FLAG:		.word 	0				# Gets set by the interval timer indicating that the loop can continue
@@ -1284,6 +1346,11 @@ CONTROLLER_A_FF:	.word	0				# Keeps track of when a new button is pressed
 BUTTON_STATUS:		.word 	0				# Somewhere to store the buttons values
 BUTTON_STATUS_FF:	.word	0				# Keeps track of when a new button is pressed
 .endif
+
+
+RNGState:
+    # default RNG seed
+    .word 0xdeadbeef, 0xcafef00d, 0x31415927, 0xfedcba98, 0x01234567
 
 # Character map holds the data for the big score characters
 # The MSB       is column 0 (left)  of the char, drawn from bottom to top

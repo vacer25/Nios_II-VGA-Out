@@ -25,6 +25,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 1. ~~Figure out double buffering~~
 	- Done
 1. Implement some form of randomness (starting ball directions, etc...)
+	- In progress (PRNG implemented but not used)
 1. Make the score numbers the same size on different display sizes
 1. Make the ball speed constant on all display sizes
 	- In progress
