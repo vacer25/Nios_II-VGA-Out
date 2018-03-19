@@ -5,7 +5,10 @@
 
 .equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
 .equ USE_DOUBLE_BUFFERED, 1
-.equ USE_SNES_CONTROLLER, 0
+.equ USE_SNES_CONTROLLER, 1
+.equ NUM_CONTROLLERS, 2
+
+.equ DEBUG_DUPLICATE_C1_DATA_TO_C2, 1
 
 # -------------------- SCREEN DATA --------------------
 
@@ -211,27 +214,7 @@
 
 .if USE_SNES_CONTROLLER == 1
 .macro  READ_SNES
-    subi    sp, sp, 4 * 8
-    stw     r8,   0(sp)
-    stw     r9,   4(sp)
-    stw     r10,  8(sp)
-    stw     r11, 12(sp)
-    stw     r12, 16(sp)
-    stw     r13, 20(sp)
-    stw     r14, 24(sp)
-    stw     r15, 28(sp)
-
     call    SNESController_Read
-
-    ldw     r8,   0(sp)
-    ldw     r9,   4(sp)
-    ldw     r10,  8(sp)
-    ldw     r11, 12(sp)
-    ldw     r12, 16(sp)
-    ldw     r13, 20(sp)
-    ldw     r14, 24(sp)
-    ldw     r15, 28(sp)
-    addi    sp, sp, 4 * 8
 .endm
 .else
 .macro  READ_BUTTONS
@@ -397,8 +380,6 @@ WaitForStart:
     GET_RANDOM_NUM
 
 .if USE_SNES_CONTROLLER == 1
-	# TODO: test this press start code for the SNES controller
-
 	# We need to delay because it breaks if we don't
 	# This will delay for 2 ms
     movui	r8, 50000
@@ -406,8 +387,16 @@ WaitForStart:
 	bgtu	r8, r0, 3b
 		
 	READ_SNES										# Read controller
-	andi	r3, r3, 0x3000							# Get start and select button status (first frame)
-	bne		r3, r0, Loop							# Branch to Loop if start or select button is pressed
+.if NUM_CONTROLLERS == 2
+	andi	r2, r2, 0x3000							# Get start and select button status
+    andi	r3, r3, 0x3000							# Get start and select button status for controller 2
+    cmpne   r2, r0, r2
+    cmpne   r3, r0, r3
+    and     r2, r2, r3                              # Start game if both P1 and P2 are ready
+.else
+	andhi	r2, r2, 0x3000							# Get start and select button status (first frame)
+.endif
+	bne		r2, r0, Loop							# Branch to Loop if start or select button is pressed
     br		WaitForStart							# Keep waiting otherwise
 1:
 .else
@@ -490,8 +479,13 @@ Check_Input:
     READ_SNES
     andi	r10, r2, 0x0400							# Check Down (Left paddle down)
     andi	r11, r2, 0x0800							# Check Up (Left paddle up)
+.if NUM_CONTROLLERS == 2
+    andi    r12, r3, 0x0400                         # Check 2nd controller
+    andi    r13, r3, 0x0800
+.else
     andi	r12, r2, 0x8000							# Check B (Right paddle down)
     andi	r13, r2, 0x0040							# Check X (Right paddle up)
+.endif
 .else
     ldwio	r8, 0(r9)								# Read switches
     andi	r10, r8, 256							# Check switch 8 (Left paddle down)
@@ -582,12 +576,25 @@ Update_B_Y:
     
 Pause:
 .if USE_SNES_CONTROLLER == 1
-	ldw		r8, CONTROLLER_A_FF(r0)
+	ldh		r8, CONTROLLER_A_FF(r0)
 	andi	r8, r8, 0x3000							# Check if start or select is pressed
+.if NUM_CONTROLLERS == 2
+    # r2 is used as a temp. register
+    ldh     r2, CONTROLLER_B_FF(r0)
+    andi    r2, r2, 0x3000
+    or      r8, r2, r8
+.endif
 	beq		r0, r8, 1f
 	
 	# TODO: call fill color, call PrintPauseText, and call DrawScreen somewhere in here (probably on this line)
 	
+    FILL_COLOR	BG_COL								# Clear screen
+	call 	DrawScreen
+	call	PrintPauseText
+.if USE_DOUBLE_BUFFERED == 1
+	call	SwapBuffers
+.endif
+
 2:
 	# We need to delay because it breaks if we don't
 	# This will delay for 2 ms
@@ -596,8 +603,12 @@ Pause:
 	bgtu	r8, r0, 3b
 	
 	READ_SNES
-	andi	r3, r3, 0x3000							# Loop while start or select hasn't been pressed again
-	beq		r0, r3, 2b
+	andhi	r2, r2, 0x3000							# Loop while start or select hasn't been pressed again
+.if NUM_CONTROLLERS == 2
+    andhi   r3, r3, 0x3000
+    or      r2, r2, r3
+.endif
+	beq		r0, r2, 2b
 1:
 .else
     ldwio	r8, 0(r9)								# Read switches
@@ -660,8 +671,12 @@ Wait_For_Restart_Button:
 	bgtu	r8, r0, 3b
 		
 	READ_SNES										# Read controller
-	andi	r3, r3, 0x3000							# Get start and select button status (first frame)
-	bne		r3, r0, _start							# Branch to Loop if start or select button is pressed
+	andhi	r2, r2, 0x3000							# Get start and select button status (first frame)
+.if NUM_CONTROLLERS == 2
+    andhi   r3, r3, 0x3000
+    or      r2, r2, r3
+.endif
+	bne		r2, r0, _start							# Branch to Loop if start or select button is pressed
     br		Wait_For_Restart_Button					# Keep waiting otherwise
 .else
     READ_BUTTONS									# Read buttons
@@ -1192,6 +1207,7 @@ SNESController_Initialize:
     movia   r8, SNESCONTROLLER_BASE_ADDR
     # set the clock and data pins to outputs, everything else to inputs
     # (for now, (clock, latch, data) are (0, 1, 2))
+    # data 2 is now 3
     movia   r9, 0x00000003
     stwio   r9, 4(r8) # direction register
    
@@ -1205,63 +1221,102 @@ SNESController_Initialize:
    
     ret
 
-# r2: 16 bits of controller data
-# r3: 16 bits of controller data (first frame)
+
+# r2: 16 bits of controller 1 data (first frame in upper 16)
+# r3: 16 bits of controller 2 data (first frame in upper 16)
 # The values of CONTROLLER_A and CONTROLLER_A_FF are updated as well
 SNESController_Read:
-    movia   r8, SNESCONTROLLER_BASE_ADDR
+    subi    sp, sp, 4*6
+    stw     r16, 4*0(sp)
+    stw     r17, 4*1(sp)
+    stw     r18, 4*2(sp)
+    stw     r19, 4*3(sp)
+    stw     r20, 4*4(sp)
+    stw     r21, 4*5(sp)
+
+    # r16: IO base, r17: current port value, r18: bit counter, r19: delay counter
+    # r20: temporary data, r21: temporary data
+    movia   r16, SNESCONTROLLER_BASE_ADDR
 
     # prepare bit counter
-    movi    r10, 16
+    movi    r18, 16
 
     # prepare output register
     mov     r2, r0
+    mov     r3, r0
 
     # set latch high
-    movia   r9, 0x00000003
-    stwio   r9, 0(r8)
+    movia   r17, 0x00000003
+    stwio   r17, 0(r16)
 
     # set latch low
-    andi    r9, r9, 1
+    andi    r17, r17, 1
 1:
     # delay
-    movui   r11, 10
-2:  subi    r11, r11, 1
-    bge     r11, r0, 2b
+    movui   r19, 10
+2:  subi    r19, r19, 1
+    bge     r19, r0, 2b
 
     # set clock low
-    andi    r9, r9, 0xfffe
-    stwio   r9, 0(r8)
+    andi    r17, r17, 0xfffe
+    stwio   r17, 0(r16)
 
     # read data bit
-    ldwio   r12, 0(r8)
+    ldwio   r20, 0(r16)
     slli    r2, r2, 1
-    andi    r12, r12, 4
-    cmpeq   r12, r12, r0
-    or      r2, r2, r12
+    andi    r21, r20, 4
+    cmpeq   r21, r21, r0
+    or      r2, r2, r21
+    slli    r3, r3, 1
+.if DEBUG_DUPLICATE_C1_DATA_TO_C2 == 1
+    andi    r21, r20, 4
+.else
+    andi    r21, r20, 8
+.endif
+    cmpeq   r21, r21, r0
+    or      r3, r3, r21
 
     # delay
-    movui   r11, 10
-2:  subi    r11, r11, 1
-    bge     r11, r0, 2b
+    movui   r19, 10
+2:  subi    r19, r19, 1
+    bge     r19, r0, 2b
 
     # set clock high
-    ori     r9, r9, 1
-    stwio   r9, 0(r8)
+    ori     r17, r17, 1
+    stwio   r17, 0(r16)
 
     # if we need to read more bits, loop
-    subi    r10, r10, 1
-    bgt     r10, r0, 1b
+    subi    r18, r18, 1
+    bgt     r18, r0, 1b
 	
 	# calculate first-frame-ness
 	# a button is first frame if it was not pressed last frame and is pressed this frame
-	ldw		r3, CONTROLLER_A(r0)
-	nor		r3, r3, r0
-	and		r3, r3, r2
-	stw		r3, CONTROLLER_A_FF(r0)
-	stw		r2, CONTROLLER_A(r0)
+	ldh		r21, CONTROLLER_A(r0)
+	nor		r21, r21, r0
+	and		r21, r21, r2
+	sth		r21, CONTROLLER_A_FF(r0)
+	sth		r2, CONTROLLER_A(r0)
+    slli    r21, r21, 16
+    or      r2, r2, r21
+
+	ldh		r21, CONTROLLER_B(r0)
+	nor		r21, r21, r0
+	and		r21, r21, r3
+	sth		r21, CONTROLLER_B_FF(r0)
+	sth		r3, CONTROLLER_B(r0)
+    slli    r21, r21, 16
+    or      r3, r3, r21
 	
+    ldw     r16, 4*0(sp)
+    ldw     r17, 4*1(sp)
+    ldw     r18, 4*2(sp)
+    ldw     r19, 4*3(sp)
+    ldw     r20, 4*4(sp)
+    ldw     r21, 4*5(sp)
+    addi    sp, sp, 4*6
+    
 	ret
+
    
 .else
 	
@@ -1349,8 +1404,10 @@ WINNER:				.word	0				# Temporary variable to record the winning player's number
 CUR_BUFFER:			.word	0				# 1 if we're currently writing to framebuffer A, 0 for buffer B
 
 .if USE_SNES_CONTROLLER == 1
-CONTROLLER_A:		.word	0				# Somewhere to store the controller values (we can't just read the controller again)
-CONTROLLER_A_FF:	.word	0				# Keeps track of when a new button is pressed
+CONTROLLER_A:		.hword	0				# Somewhere to store the controller values (we can't just read the controller again)
+CONTROLLER_A_FF:	.hword	0				# Keeps track of when a new button is pressed
+CONTROLLER_B:       .hword  0
+CONTROLLER_B_FF:    .hword  0
 .else
 BUTTON_STATUS:		.word 	0				# Somewhere to store the buttons values
 BUTTON_STATUS_FF:	.word	0				# Keeps track of when a new button is pressed
