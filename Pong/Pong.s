@@ -209,6 +209,7 @@
     call 	DrawPaddle
 .endm
 
+.if USE_SNES_CONTROLLER == 1
 .macro  READ_SNES
     subi    sp, sp, 4 * 8
     stw     r8,   0(sp)
@@ -232,7 +233,7 @@
     ldw     r15, 28(sp)
     addi    sp, sp, 4 * 8
 .endm
-
+.else
 .macro  READ_BUTTONS
     subi    sp, sp, 4
     stw     r8,   0(sp)
@@ -242,6 +243,7 @@
     ldw     r8,   0(sp)
     addi    sp, sp, 4
 .endm
+.endif
 
 .macro  GET_RANDOM_NUM
     call    GenerateRandomNumber
@@ -404,8 +406,8 @@ WaitForStart:
 	bgtu	r8, r0, 3b
 		
 	READ_SNES										# Read controller
-	andi	r3, r3, 0x1000							# Get start button status (first frame)
-	bne		r3, r0, Loop							# Branch to Loop if start button is pressed
+	andi	r3, r3, 0x3000							# Get start and select button status (first frame)
+	bne		r3, r0, Loop							# Branch to Loop if start or select button is pressed
     br		WaitForStart							# Keep waiting otherwise
 1:
 .else
@@ -651,15 +653,22 @@ Print_Win_Text:
 .endif
     
 
-Wait_For_Restart_Button:	
-
-	# TODO: add code for restarting with controller by pressing start
-					
+Wait_For_Restart_Button:
+.if USE_SNES_CONTROLLER == 1
+    movui	r8, 50000
+3:	subi	r8, r8, 1
+	bgtu	r8, r0, 3b
+		
+	READ_SNES										# Read controller
+	andi	r3, r3, 0x3000							# Get start and select button status (first frame)
+	bne		r3, r0, _start							# Branch to Loop if start or select button is pressed
+    br		Wait_For_Restart_Button					# Keep waiting otherwise
+.else
     READ_BUTTONS									# Read buttons
     andi	r3, r3, 1								# Get button 0 status (first frame)
     bne		r3, r0, _start							# Branch to start if button is pressed
 	br		Wait_For_Restart_Button					# Otherwise, keep waiting for a button press
-
+.endif
 End:
     br 		End
 

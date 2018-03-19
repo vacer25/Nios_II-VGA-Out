@@ -10,9 +10,9 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 * **Pong**  
 	- Basic two player implementation
 	- Switches 9/8 control left paddle and 1/0 control right paddle
-	- With SNES controller support, Up/Down control left paddle and X/B control right paddle
 	- Switch 3 is used to pause the game
 	- Button 0 is used to restart the game
+	- With SNES controller support, Up/Down control left paddle, X/B control right paddle, and Start / Select start, pause, and restart the game
 	- First player to reach a score of 9 wins
 	
 	<br>
@@ -22,14 +22,13 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	<img src="Pong/Screenshots/Win.png" alt="Start" style="width: 500px;"/>
 	
 ## Todo:
-1. ~~Figure out double buffering~~
-	- Done
-1. Implement some form of randomness (starting ball directions, etc...)
-	- In progress (PRNG implemented but not used)
-1. Make the score numbers the same size on different display sizes
-1. Make the ball speed constant on all display sizes
+1. [x] Figure out double buffering (done on 2018-03-09)
+1. [ ] Implement some form of randomness (starting ball directions, etc...)
+	- In progress (PRNG implemented but not yet used)
+1. [ ] Make the score numbers the same size on different display sizes
+1. [ ] Make the ball speed constant on all display sizes
 	- In progress
-1. Interface with the SNES controller
-	- Working with one controller as of 2018-03-11
-	- Two controller support in progress
-1. Add Pong AI
+1. [x] Interface with one SNES controller (done on 2018-03-11)
+1. [ ] Interface with two SNES controllers
+	- In progress
+1. [ ] Add Pong AI
