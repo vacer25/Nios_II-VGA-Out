@@ -28,7 +28,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	- Preset 2 glider pattern for testing
 	
 	<br>
-	<img src="GOL/Screenshots/GOL.gif" alt="GOL" style="width: 500px;"/>
+	<img src="GOL/Screenshots/GOL_New.gif" alt="GOL" style="width: 500px;"/>
 	
 ## Todo:
 1. [x] Figure out double buffering (done on 2018-03-09)
