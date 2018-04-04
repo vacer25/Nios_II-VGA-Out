@@ -40,8 +40,10 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 1. [x] Interface with one SNES controller (done on 2018-03-11)
 1. [x] Interface with two SNES controllers (done on 2018-03-19)
 1. [ ] Add Pong AI
-
-1. [ ] Optimize GOL (tune memory access to increase speed)
+<br>
+1. [ ] Optimize GOL updates (tune memory access to increase speed)
+	- In progress
+1. [ ] Add boundry checking and wrap-around mode
 	- In progress
 1. [ ] Add random fill to init. GOL playfield
 1. [ ] Add other rulesets to GOL (in a general way)
