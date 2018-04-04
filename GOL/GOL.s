@@ -88,6 +88,13 @@
     call 	WritePixel
 .endm
 
+.macro	DRAW_PIXEL_CONST_COL	x, y, col
+	mov		r4, \x
+	mov		r5, \y
+    movui	r6, \col
+    call 	WritePixel
+.endm
+
 .macro	IS_LIVE_CELL	x, y
 	subi 	sp, sp, 4
     stw 	r4, 0(sp)
@@ -96,17 +103,26 @@
 	mov		r5, \y
     call 	ReadPixel
     movi	r4, L_COL
-	cmpeq	r2, r4, r2
+	xor		r2, r4, r2
+	cmpeq	r2, r0, r2
 	
     ldw 	r4, 0(sp)
     addi 	sp, sp, 4
 .endm
 
-.macro	DRAW_PIXEL_CONST_COL	x, y, col
-	mov		r4, \x
-	mov		r5, \y
-    movui	r6, \col
-    call 	WritePixel
+.macro	IS_LIVE_CELL_CONST	x, y
+	subi 	sp, sp, 4
+    stw 	r4, 0(sp)
+	
+	movui	r4, \x
+	movui	r5, \y
+    call 	ReadPixel
+    movi	r4, L_COL
+	xor		r2, r4, r2
+	cmpeq	r2, r0, r2
+	
+    ldw 	r4, 0(sp)
+    addi 	sp, sp, 4
 .endm
 
 .macro  READ_BUTTONS
@@ -203,9 +219,7 @@ _start:
 	call	FillColourFast
 	call	SwapBuffers
 	
-    movi 	r16, WIDTH					# Width
-    movi 	r17, HEIGHT-1				# Height
-    
+    /*
     # Setup interval timer
     movia 	r13, TIMER_BASE_ADDR		# Internal timer base address
     movia 	r12, TIMER_INTERVAL				# 1/(50 MHz) x (2500000) = 50 msec
@@ -229,15 +243,31 @@ _start:
     ldw  	r4, CONTINUE_FLAG(r0)
     movi	r4, 0
     stw  	r4, CONTINUE_FLAG(r0)  
+	*/
 	
     # This is required in case the character buffer might of been in use before we started running
 	call    ClearScreenFast
 	
-	# Make a glider!
+	# Make two gliders on both buffers
 	call 	InitBoard
 	call	SwapBuffers   
 	call 	InitBoard
 	call	SwapBuffers   
+	
+	# -------------------- TESTING --------------------
+	
+	/*
+	DRAW_PIXEL_CONST	0, 3, 0xF0
+    
+    IS_LIVE_CELL_CONST	0, 3
+	beq		r2, r0, 1f
+	DRAW_PIXEL_CONST	0, 5, 0xAA
+1:
+	IS_LIVE_CELL_CONST	2, 3
+	beq		r2, r0, 2f
+	DRAW_PIXEL_CONST	2, 5, 0xAA
+2:
+	*/
 	
 	# -------------------- WAIT FOR START --------------------
 
@@ -300,17 +330,23 @@ InitBoard:
 	# xxx  3
 	#0123  
 
-    DRAW_PIXEL_CONST	2, 1, L_COL
-    DRAW_PIXEL_CONST	3, 2, L_COL
-    DRAW_PIXEL_CONST	1, 3, L_COL
-    DRAW_PIXEL_CONST	2, 3, L_COL
-    DRAW_PIXEL_CONST	3, 3, L_COL
+    DRAW_PIXEL_CONST	3+2, 2+1, L_COL
+    DRAW_PIXEL_CONST	3+3, 2+2, L_COL
+    DRAW_PIXEL_CONST	3+1, 2+3, L_COL
+    DRAW_PIXEL_CONST	3+2, 2+3, L_COL
+    DRAW_PIXEL_CONST	3+3, 2+3, L_COL
 	
-    DRAW_PIXEL_CONST	(WIDTH-5)+2, 1+1, L_COL
-    DRAW_PIXEL_CONST	(WIDTH-5)+1, 1+2, L_COL
-    DRAW_PIXEL_CONST	(WIDTH-5)+1, 1+3, L_COL
-    DRAW_PIXEL_CONST	(WIDTH-5)+2, 1+3, L_COL
-    DRAW_PIXEL_CONST	(WIDTH-5)+3, 1+3, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-6)+2, 3+1, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-6)+1, 3+2, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-6)+1, 3+3, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-6)+2, 3+3, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-6)+3, 3+3, L_COL
+	
+	# Init. max & min values to worst-case senario
+	mov		r12, r0                                         # Current min X = 0
+	movi	r13, WIDTH										# Current max X = WIDTH
+	mov		r14, r0                                         # Current min Y = 0
+	movi	r15, HEIGHT                                     # Current max Y = HEIGHT
 
     ldw 	ra,  0(sp)  
     addi 	sp, sp, 4
@@ -336,12 +372,9 @@ UpdateGOL:
 	movi	r22, 2
 	movi	r23, 3
 	
-	call 	GetGOLBounds									# Get the min/max X&Y coordinates of curent GOL pattern
-	
 	mov  	r17, r15										# r17 <- Max Y of curent GOL pattern
     1:	mov  	r16, r13									# r16 <- Max X of curent GOL pattern
-		2:			
-			mov		r3, r0									# Reset neighbor counter		
+		2:	mov		r3, r0									# Reset neighbor counter		
 			
 			subi	r19, r17, 1								# r19 <- Current Y - 1
 			addi	r21, r17, 1								# r21 <- Current Y - 1
@@ -384,12 +417,19 @@ Set_Current_Cell_Alive:
 				
 Continue_GOL_Loop:
 				
+			#IS_LIVE_CELL	r16, r17
+			#bne		r2, r0, Skip_Fill
+			#DRAW_PIXEL_CONST_COL	r16, r17, 0xF0
+    
+#Skip_Fill:
+				
 		subi 	r16, r16, 1                         		# Decrement current X
 		bge 	r16, r12, 2b                         		# Loop if current X >= Min X of curent GOL pattern
 	subi 	r17, r17, 1                     				# Decrement current Y
 	bge 	r17, r14, 1b                     				# Loop if current Y >= Min Y of curent GOL pattern
 	
-End_DrawScreen:
+	call 	GetGOLBounds									# Get the min/max X&Y coordinates of curent GOL pattern
+	
     ldw 	ra,  52(sp)
     ldw 	r23, 48(sp)
     ldw 	r22, 44(sp)
@@ -467,10 +507,10 @@ Cell_Not_Alive_Col_Check:
 	subi 	r17, r17, 1                     				# Decrement current Y
 	bgt 	r17, r0, LoopY                     				# Loop if current Y > 0
 	
-	subi	r12, r12, 1										# Decrease min X by 1 (for padding)
-	addi	r13, r13, 1                                     # Increase max X by 1 (for padding)
-	subi	r14, r14, 1										# Decrease min Y by 1 (for padding)
-	addi	r15, r15, 1                                     # Increase max Y by 1 (for padding)
+	subi	r12, r12, 2										# Decrease min X by 2 (for padding)
+	addi	r13, r13, 2                                     # Increase max X by 2 (for padding)
+	subi	r14, r14, 2										# Decrease min Y by 2 (for padding)
+	addi	r15, r15, 2                                     # Increase max Y by 2 (for padding)
 	
 	ldw 	ra,  40(sp)
 	ldw 	r17, 36(sp)
@@ -629,7 +669,7 @@ WritePixel:
     ldw 	r2, 0(sp)  
     addi 	sp, sp, 20
     ret
-	
+
 	
 # r4: X
 # r5: Y
@@ -803,7 +843,6 @@ CUR_BUFFER:			.word	0				# 1 if we're currently writing to framebuffer A, 0 for 
 
 BUTTON_STATUS:		.word 	0				# Somewhere to store the buttons values
 BUTTON_STATUS_FF:	.word	0				# Keeps track of when a new button is pressed
-
 
 RNGState:
     # default RNG seed
