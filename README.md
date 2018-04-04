@@ -27,7 +27,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	<br>
 	<img src="GOL/Screenshots/GOL_New.gif" alt="GOL" style="width: 500px;"/>
 	
-## Todo:
+## TODO:
 1. [x] Figure out double buffering (done on 2018-03-09)
 1. [ ] Implement some form of randomness (starting ball directions, etc...)
 	- In progress (PRNG implemented but not yet used)
@@ -37,11 +37,10 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 1. [x] Interface with one SNES controller (done on 2018-03-11)
 1. [x] Interface with two SNES controllers (done on 2018-03-19)
 1. [ ] Add Pong AI
-<br>
-1. [ ] Optimize GOL updates (tune memory access to increase speed)
+2. [ ] Optimize GOL updates (tune memory access to increase speed)
 	- In progress
-1. [ ] Add boundry checking and wrap-around mode
+2. [ ] Add boundry checking and wrap-around mode
 	- In progress
-1. [ ] Add random fill to init. GOL playfield
-1. [ ] Add other rulesets to GOL (in a general way)
-1. [ ] Add colouring of cells to GOL 
+2. [ ] Add random fill to init. GOL playfield
+2. [ ] Add other rulesets to GOL (in a general way)
+2. [ ] Add colouring of cells to GOL 
