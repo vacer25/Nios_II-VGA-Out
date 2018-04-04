@@ -17,10 +17,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 	- First player to reach a score of 9 wins
 	
 	<br>
-	<img src="Pong/Screenshots/Start.png" alt="Start" style="width: 500px;"/>
-	<img src="Pong/Screenshots/Playing.png" alt="Start" style="width: 500px;"/>
-	<img src="Pong/Screenshots/Paused.png" alt="Start" style="width: 500px;"/>
-	<img src="Pong/Screenshots/Win.png" alt="Start" style="width: 500px;"/>
+	<img src="Pong/Screenshots/Pong.gif" alt="Pong" style="width: 500px;"/>
 	
 	                     
 * **Game of Life**  
