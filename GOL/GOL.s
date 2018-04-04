@@ -88,10 +88,18 @@
     call 	WritePixel
 .endm
 
-.macro	GET_PIXEL	x, y
+.macro	IS_LIVE_CELL	x, y
+	subi 	sp, sp, 4
+    stw 	r4, 0(sp)
+	
 	mov		r4, \x
 	mov		r5, \y
     call 	ReadPixel
+    movi	r4, L_COL
+	cmpeq	r2, r4, r2
+	
+    ldw 	r4, 0(sp)
+    addi 	sp, sp, 4
 .endm
 
 .macro	DRAW_PIXEL_CONST_COL	x, y, col
@@ -102,17 +110,29 @@
 .endm
 
 .macro  READ_BUTTONS
-    subi    sp, sp, 4
-    stw     r8,   0(sp)
-
     call    Buttons_Read
-
-    ldw     r8,   0(sp)
-    addi    sp, sp, 4
 .endm
 
 .macro  GET_RANDOM_NUM
     call    GenerateRandomNumber
+.endm
+
+.macro  MIN, dest, src1, src2
+    blt		\src1, \src2, 1f
+	mov		\dest, \src2
+	br		2f
+1:
+	mov		\dest, \src1
+2:
+.endm
+
+.macro  MAX, dest, src1, src2
+    bgt		\src1, \src2, 1f
+	mov		\dest, \src2
+	br		2f
+1:
+	mov		\dest, \src1
+2:
 .endm
 
 # -------------------- INTERRUPTS --------------------
@@ -219,9 +239,6 @@ _start:
 	call 	InitBoard
 	call	SwapBuffers   
 	
-	movi	r2, 2
-	GET_PIXEL 	r2, r2
-	
 	# -------------------- WAIT FOR START --------------------
 
 WaitForStart:
@@ -240,7 +257,6 @@ Loop:
     
     # -------------------- DRAWING --------------------
     
-    #FILL_COLOR	D_COL								# Clear screen
     call 	UpdateGOL
     
     # -------------------- PAUSE --------------------
@@ -254,39 +270,33 @@ Loop:
 
     # -------------------- SWAP BUFFERS --------------------
 	
-#.if USE_DOUBLE_BUFFERED == 1
-	
     # Instead of waiting using the timer interrupt, we're going to swap the buffers
 	# Part of swapping the buffers requires us to wait until the buffer has actually been swapped
 	# This synchronizes us so the code runs once per frame
 	call	SwapBuffers   
     # If this point is reached, pause is not activated, so loop to draw the next frame
 	br Loop
-    
-#.else
-    
-#Wait:
-#    ldw  	r4, CONTINUE_FLAG(r0)					# Load the continue flag from mem.
-#    beq		r4, r0, Wait							# If flag is not set, loop back and keep waiting
-#    movi	r4, 0									# Otherwise, clear the flag
-#    stw		r4, CONTINUE_FLAG(r0)					# Store the continue flag from mem.
-#    br		Loop
-#	
-#.endif	
 
 End:
     br 		End
 
-
-# -------------------- DRAWING --------------------
+# -------------------- LOGIC --------------------
 
 InitBoard:
 	subi 	sp, sp, 4
     stw 	ra,  0(sp)
 
+	#GLIDER 1
 	#      0
 	#  x   1
 	#   x  2
+	# xxx  3
+	#0123  
+	
+	#GLIDER 2
+	#      0
+	#  x   1
+	# x    2
 	# xxx  3
 	#0123  
 
@@ -295,6 +305,12 @@ InitBoard:
     DRAW_PIXEL_CONST	1, 3, L_COL
     DRAW_PIXEL_CONST	2, 3, L_COL
     DRAW_PIXEL_CONST	3, 3, L_COL
+	
+    DRAW_PIXEL_CONST	(WIDTH-5)+2, 1+1, L_COL
+    DRAW_PIXEL_CONST	(WIDTH-5)+1, 1+2, L_COL
+    DRAW_PIXEL_CONST	(WIDTH-5)+1, 1+3, L_COL
+    DRAW_PIXEL_CONST	(WIDTH-5)+2, 1+3, L_COL
+    DRAW_PIXEL_CONST	(WIDTH-5)+3, 1+3, L_COL
 
     ldw 	ra,  0(sp)  
     addi 	sp, sp, 4
@@ -306,7 +322,7 @@ UpdateGOL:
     stw 	r3,  4(sp)										# Neighbor counter
     # stw 	r4,  8(sp)										# Reserved for pixel write
     # stw 	r5,  12(sp)										# Reserved for pixel write
-    # stw 	r6,  16(sp)										# Reserved for pixel read
+    # stw 	r6,  16(sp)										# Unused
     stw 	r16, 20(sp)										# Current X
 	stw 	r17, 24(sp)										# Current Y
     stw 	r18, 28(sp)                                     # Current offset X
@@ -320,30 +336,29 @@ UpdateGOL:
 	movi	r22, 2
 	movi	r23, 3
 	
-	movi 	r16, WIDTH-2									# r16 <- End X
-    1:	movi 	r17, HEIGHT-2								# r17 <- End Y
-		2:		
-				
-			mov		r3, r0									# Reset neighbor counter
-				
-			subi	r18, r16, 1								# r18 <- Current X - 1
-			addi	r20, r16, 1								# r20 <- Current X + 1
-			3:	subi	r19, r17, 1							# r19 <- Current Y - 1
-				addi	r21, r17, 1							# r21 <- Current Y - 1
+	call 	GetGOLBounds									# Get the min/max X&Y coordinates of curent GOL pattern
+	
+	mov  	r17, r15										# r17 <- Max Y of curent GOL pattern
+    1:	mov  	r16, r13									# r16 <- Max X of curent GOL pattern
+		2:			
+			mov		r3, r0									# Reset neighbor counter		
+			
+			subi	r19, r17, 1								# r19 <- Current Y - 1
+			addi	r21, r17, 1								# r21 <- Current Y - 1
+			3:	subi	r18, r16, 1							# r18 <- Current X - 1
+				addi	r20, r16, 1							# r20 <- Current X + 1
 				4:		
 						
-					GET_PIXEL	r18, r19					# r2 <- Is current neighbor alive (in prev. itteration)
+					IS_LIVE_CELL	r18, r19				# r2 <- Is current neighbor alive (in prev. itteration)
 					add		r3, r3, r2						# r3 <- Add up neighbor count around current cell
 						
-					addi 	r19, r19, 1             		# Increment current offset Y
-					ble 	r19, r21, 4b            		# Loop if current offset Y <= Current X + 1
 				addi 	r18, r18, 1                 		# Increment current offset X
-				ble 	r18, r20, 3b                		# Loop if current offset X <= Current X + 1
-						
-						
-				GET_PIXEL	r16, r17						# r2 <- Is current cell alive (in prev. itteration)
+				ble 	r18, r20, 4b                		# Loop if current offset X <= Current X + 1
+			addi 	r19, r19, 1             				# Increment current offset Y
+			ble 	r19, r21, 3b            				# Loop if current offset Y <= Current X + 1
+			
+				IS_LIVE_CELL	r16, r17					# r2 <- Is current cell alive (in prev. itteration)
 				sub		r3, r3, r2							# Subtract current cell's state
-						
 						
 				bne		r2, r0, Current_Cell_Alive			# Go to Current_Cell_Alive is current cell is not 0 (alive)
 		
@@ -369,32 +384,11 @@ Set_Current_Cell_Alive:
 				
 Continue_GOL_Loop:
 				
-			
-            subi 	r17, r17, 1                     		# Decrement current Y
-            bgt 	r17, r0, 2b                     		# Loop if current Y > 0
-        subi 	r16, r16, 1                         		# Decrement current X
-        bgt 	r16, r0, 1b                         		# Loop if current X > 0
+		subi 	r16, r16, 1                         		# Decrement current X
+		bge 	r16, r12, 2b                         		# Loop if current X >= Min X of curent GOL pattern
+	subi 	r17, r17, 1                     				# Decrement current Y
+	bge 	r17, r14, 1b                     				# Loop if current Y >= Min Y of curent GOL pattern
 	
-	
-#	addi	r5, r4, 2
-#	beq		r2, r0, Skip_Draw_Mirror
-#    DRAW_PIXEL_CONST_COL	r4, r5, L_COL
-#	br	End_DrawScreen
-#	
-#Skip_Draw_Mirror:
-#    DRAW_PIXEL_CONST_COL	r4, r5, D_COL
-    
-    #movi 	r16, WIDTH-1							# r16 <- End X
-    #1:	movi 	r17, HEIGHT-1						# r17 <- End Y
-    #    2:  mov 	r4, r16							# Char X <- current X
-    #        mov 	r5, r17							# Char Y <- current Y
-    #        mov 	r6, r0                          # Char value <- 0 (blank)
-    #        call 	WriteChar						# Draw one char
-    #        subi 	r17, r17, 1                     # Decrement current Y
-    #        bge 	r17, r0, 2b                     # Loop if current Y >= 0
-    #    subi 	r16, r16, 1                         # Decrement current X
-    #    bge 	r16, r0, 1b                         # Loop if current X >= 0
-    
 End_DrawScreen:
     ldw 	ra,  52(sp)
     ldw 	r23, 48(sp)
@@ -413,6 +407,87 @@ End_DrawScreen:
     addi 	sp, sp, 4*14
     ret
 	
+# r12: Returned min X coordinate
+# r13: Returned max X coordinate
+# r14: Returned min Y coordinate
+# r15: Returned max Y coordinate
+GetGOLBounds:
+	subi 	sp, sp, 4*11
+    stw 	r2,  0(sp)										# Cell is alive flag
+    stw 	r3,  4(sp)										# Did check current row flag
+    # stw 	r4,  8(sp)										# Reserved for pixel write
+    # stw 	r5,  12(sp)										# Reserved for pixel write
+    stw 	r6,  16(sp)										# Current min X
+	stw 	r7,  20(sp)										# Current max X
+	stw 	r8,  24(sp)										# Current min Y
+	stw 	r9,  28(sp)										# Current max Y
+    stw 	r16, 32(sp)										# Current X
+	stw 	r17, 36(sp)										# Current Y
+	stw 	ra,  40(sp)
+    
+	# Init. max & min values to worst-case senario
+	movi	r6, WIDTH										# Current min X = WIDTH
+	mov		r7, r0                                          # Current max X = 0
+	movi	r8, HEIGHT                                      # Current min Y = HEIGHT
+	mov		r9, r0                                          # Current max Y = 0
+	
+	# Reset min/max Y & Y
+	mov		r12, r6
+	mov		r13, r7
+	mov		r14, r8
+	mov		r15, r9
+	
+	movi 	r17, HEIGHT-2									# r17 <- End Y
+    LoopY:	
+	
+		mov		r3, r0										# Reset did check current row flag
+	
+		movi 	r16, WIDTH-2								# r16 <- End X
+		LoopX:	
+	
+		IS_LIVE_CELL	r16, r17							# r2 <- Is current call alive (in prev. itteration)
+		
+		beq		r2,  r0, Cell_Not_Alive_Col_Check			# If this cell is not alive, skip it
+		MIN		r12, r6, r16								# Min X = MIN(Min X, Current X)
+		MAX		r13, r7, r16								# Max X = MAX(Max X, Current X)
+		mov		r6,  r12									# Current min X = Min X
+		mov		r7,  r13									# Current max X = Max X
+		
+		bne		r3,  r0, Cell_Not_Alive_Col_Check			# If this row has already been used to set min/max Y, skip it
+		MIN		r14, r8, r17								# Min Y = MIN(Min Y, Current Y)
+		MAX		r15, r9, r17								# Max Y = MAX(Max Y, Current Y)
+		mov		r8,  r14									# Current min Y = Min Y
+		mov		r9,  r15									# Current max Y = Max Y
+		movi	r3, 1										# Did check current row = true
+		
+Cell_Not_Alive_Col_Check:		
+	
+		subi 	r16, r16, 1                         		# Decrement current X
+		bgt 	r16, r0, LoopX                        		# Loop if current X > 0
+	subi 	r17, r17, 1                     				# Decrement current Y
+	bgt 	r17, r0, LoopY                     				# Loop if current Y > 0
+	
+	subi	r12, r12, 1										# Decrease min X by 1 (for padding)
+	addi	r13, r13, 1                                     # Increase max X by 1 (for padding)
+	subi	r14, r14, 1										# Decrease min Y by 1 (for padding)
+	addi	r15, r15, 1                                     # Increase max Y by 1 (for padding)
+	
+	ldw 	ra,  40(sp)
+	ldw 	r17, 36(sp)
+	ldw 	r16, 32(sp)
+    ldw 	r9,  28(sp)
+	ldw 	r8,  24(sp)
+	ldw 	r7,  20(sp)
+	ldw 	r6,  16(sp)
+    # ldw 	r5,  12(sp)
+    # ldw 	r4,  8(sp)  
+    ldw 	r3,  4(sp)
+    ldw 	r2,  0(sp)  
+    addi 	sp, sp, 4*11
+    ret
+
+	
+# -------------------- DRAWING --------------------
 	
 # r4: Colour value
 FillColourFast:
@@ -497,6 +572,7 @@ ClearScreenFast:
     addi 	sp, sp, 16
     ret
 
+	
 # r4: Column (x)
 # r5: Row    (y)
 # r6: Character value
@@ -554,6 +630,7 @@ WritePixel:
     addi 	sp, sp, 20
     ret
 	
+	
 # r4: X
 # r5: Y
 # r2: Returned colour value (output)
@@ -570,16 +647,14 @@ ReadPixel:
     add 	r5, r5, r2                              # r5 <- Calculated memory address for specified X,Y
  
 .if LOG2_BYTES_PER_PIXEL == 0
-  	ldbio 	r2, 0(r5)								# Read 8-bit pixel from vga pixel buffer
+  	ldbuio 	r2, 0(r5)								# Read 8-bit pixel from vga pixel buffer
 .elseif LOG2_BYTES_PER_PIXEL == 1
-    ldhio 	r2, 0(r5)								# Read 16-bit pixel from vga pixel buffer
+    ldhuio 	r2, 0(r5)								# Read 16-bit pixel from vga pixel buffer
 .elseif LOG2_BYTES_PER_PIXEL == 2
-    ldwio 	r2, 0(r5)								# Read 32-bit pixel from vga pixel buffer
+    ldwuio 	r2, 0(r5)								# Read 32-bit pixel from vga pixel buffer
 .else
     .error "Error: Unknown pixel size"
 .endif
-
-	cmpne	r2, r0, r2
     
     ldw 	ra, 8(sp)
     ldw 	r5, 4(sp)
@@ -647,6 +722,9 @@ SwapBuffers:
 # r3: 32 bits of button data (first frame)
 # The values of BUTTON_STATUS and BUTTON_STATUS_FF are updated as well
 Buttons_Read:
+    subi    sp, sp, 4
+    stw     r8,   0(sp)
+	
     movia   r8, BUTTONS_BASE_ADDR
 	
 	# Read buttons
@@ -660,6 +738,8 @@ Buttons_Read:
 	stw		r3, BUTTON_STATUS_FF(r0)
 	stw		r2, BUTTON_STATUS(r0)
 	
+    ldw     r8,   0(sp)
+    addi    sp, sp, 4
 	ret
 
 
