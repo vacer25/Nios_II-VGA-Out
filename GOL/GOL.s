@@ -4,6 +4,7 @@
 # TARGET_SYSTEM = 3: DE10-Lite
 
 .equ TARGET_SYSTEM, 0					# Used to indicate which FPGA the code will be compiled for
+.equ USE_WRAPAROUND, 0					# Used to make the simulation wrap around the edges
 
 # -------------------- SCREEN DATA --------------------
 
@@ -67,6 +68,11 @@
 
 .equ TIMER_INTERVAL, 2500000
 
+# -------------------- REGISTER USAGE --------------------
+
+# r10: Current frame buffer address (set in GetBufferPointer called by SwapBuffers)
+# r11: Non-current frame buffer address (set in GetOppositeBufferPointer called by SwapBuffers)
+
 # -------------------- MACROS --------------------
 
 .macro	FILL_COLOR	col
@@ -102,7 +108,7 @@
 	mov		r4, \x
 	mov		r5, \y
     call 	ReadPixel
-    movi	r4, L_COL
+    movia	r4, L_COL
 	xor		r2, r4, r2
 	cmpeq	r2, r0, r2
 	
@@ -117,7 +123,7 @@
 	movui	r4, \x
 	movui	r5, \y
     call 	ReadPixel
-    movi	r4, L_COL
+    movia	r4, L_COL
 	xor		r2, r4, r2
 	cmpeq	r2, r0, r2
 	
@@ -212,6 +218,7 @@ _start:
 	movia 	sp, 0x800000				# Initial stack pointer
 
 	# Initialize framebuffers to empty
+	call 	GetBufferPointer
 	movi	r4, 0x0000
 	call	FillColourFast
 	call	SwapBuffers
@@ -294,9 +301,9 @@ Loop:
 #Pause:
 #    movia	r9, SWITCHES_BASE_ADDR					# Switches I/O Address
 #    ldwio	r8, 0(r9)								# Read switches
-#    andi	r10, r8, 1								# Get switches 1 status
-#	beq		r10, r0, 1f								# Skip drawing pause text if button not pressed
-#    bne		r10, r0, Pause							# Branch to pause if switch 3 is on (stop looping)
+#    andi	r12, r8, 1								# Get switches 1 status
+#	 beq		r12, r0, 1f							# Skip drawing pause text if button not pressed
+#    bne		r12, r0, Pause						# Branch to pause if switch 3 is on (stop looping)
 
     # -------------------- SWAP BUFFERS --------------------
 	
@@ -330,17 +337,17 @@ InitBoard:
 	# xxx  3
 	#0123  
 
-    DRAW_PIXEL_CONST	3+2, 2+1, L_COL
-    DRAW_PIXEL_CONST	3+3, 2+2, L_COL
-    DRAW_PIXEL_CONST	3+1, 2+3, L_COL
-    DRAW_PIXEL_CONST	3+2, 2+3, L_COL
-    DRAW_PIXEL_CONST	3+3, 2+3, L_COL
+    DRAW_PIXEL_CONST	1+1, 1+0, L_COL
+    DRAW_PIXEL_CONST	1+2, 1+1, L_COL
+    DRAW_PIXEL_CONST	1+0, 1+2, L_COL
+    DRAW_PIXEL_CONST	1+1, 1+2, L_COL
+    DRAW_PIXEL_CONST	1+2, 1+2, L_COL
 	
-    DRAW_PIXEL_CONST	(HEIGHT-6)+2, 3+1, L_COL
-    DRAW_PIXEL_CONST	(HEIGHT-6)+1, 3+2, L_COL
-    DRAW_PIXEL_CONST	(HEIGHT-6)+1, 3+3, L_COL
-    DRAW_PIXEL_CONST	(HEIGHT-6)+2, 3+3, L_COL
-    DRAW_PIXEL_CONST	(HEIGHT-6)+3, 3+3, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-4)+1, 2+0, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-4)+0, 2+1, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-4)+0, 2+2, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-4)+1, 2+2, L_COL
+    DRAW_PIXEL_CONST	(HEIGHT-4)+2, 2+2, L_COL
 	
 	# Init. max & min values to worst-case senario
 	mov		r12, r0                                         # Current min X = 0
@@ -534,7 +541,7 @@ FillColourFast:
 	subi 	sp, sp, 20
     stw 	r8,   0(sp)
     stw 	r9,   4(sp)
-    stw 	r10,  8(sp)
+    stw 	r12,  8(sp)
     stw 	r2,  12(sp)
     stw 	ra,  16(sp)
 
@@ -563,10 +570,10 @@ FillColourFast:
 	
 	movia 	r9, (BYTES_PER_ROW)*HEIGHT-4			# r9 <- Offset of last pixel in vga pixel buffer
 
-	call	GetBufferPointer
-	mov		r10, r2									# r10 <- Base address of vga pixel buffer
+	# call	GetBufferPointer
+	mov		r12, r10								# r12 <- Base address of vga pixel buffer (r10 contains current framebuffer address)
 	
-	add   	r9, r9, r10								# r9 <- Address of last pixel in vga pixel buffer
+	add   	r9, r9, r12 							# r9 <- Address of last pixel in vga pixel buffer
 
 # This is a temporary label!! You can do this!! :)
 1:
@@ -578,11 +585,11 @@ FillColourFast:
     nop												# Keep waiting ...
     nop												# Keep waiting ...
     nop												# Keep waiting ...
-    bge   	r9, r10, 1b								# Loop if current pixel address >= first pixel address
+    bge   	r9, r12, 1b								# Loop if current pixel address >= first pixel address
 
     ldw 	r8,   0(sp)
     ldw 	r9,   4(sp)
-    ldw 	r10,  8(sp)
+    ldw 	r12,  8(sp)
     ldw 	r2,  12(sp)
     ldw 	ra,  16(sp)
     addi 	sp, sp, 20
@@ -593,21 +600,21 @@ ClearScreenFast:
 	subi 	sp, sp, 16
     stw 	r8,   0(sp)
     stw 	r9,   4(sp)
-    stw 	r10,  8(sp)
+    stw 	r12,  8(sp)
     stw 	ra,  12(sp)
     
     movia   r8, CHARBUF
     movia   r9, CHARBUF + CHARBUF_SIZE - 4
-    movia   r10, 0x20202020
+    movia   r12, 0x20202020
 1:
-    stw     r10, 0(r9)
+    stw     r12, 0(r9)
     # maybe we have to nop here?
     subi    r9, r9, 4
     bge     r9, r8, 1b
     
     ldw 	r8,   0(sp)
     ldw 	r9,   4(sp)
-    ldw 	r10,  8(sp)
+    ldw 	r12,  8(sp)
     ldw 	ra,  12(sp)
     addi 	sp, sp, 16
     ret
@@ -646,11 +653,60 @@ WritePixel:
     #stw 	r6, 12(sp)
     stw 	ra, 16(sp)
     
+Check_To_Limit_X_Write:
+	cmpgei	r2, r4, WIDTH							# r2 <- X >= WIDTH
+	bne		r2, r0, Limit_X_To_Max_Write			# Limit X if X >= WIDTH
+	cmplt	r2, r4, r0								# r2 <- X < 0
+	bne		r2, r0, Limit_X_To_Min_Write			# Limit X if X < WIDTH
+	br 		Check_To_Limit_Y_Write					# Otherwise, check to limit Y
+Limit_X_To_Max_Write:
+.if USE_WRAPAROUND == 1
+	subi	r4, r4, WIDTH							# r4 <- X - WIDTH
+	br		Check_To_Limit_Y_Write
+.else
+	#mov		r6, r0									# Without wraparound, if X is out of bounds, this cell is not alive
+	br		End_WritePixel
+.endif
+Limit_X_To_Min_Write:
+.if USE_WRAPAROUND == 1
+	movui	r2, WIDTH								# r2 <- WIDTH
+	add		r4, r2, r4								# r4 <- WIDTH + (-X)
+	br		Check_To_Limit_Y_Write
+.else
+	#mov		r6, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_WritePixel
+.endif
+	
+Check_To_Limit_Y_Write:
+	cmpgei	r2, r5, HEIGHT							# r2 <- Y >= HEIGHT
+	bne		r2, r0, Limit_Y_To_Max_Write			# Limit Y if Y >= HEIGHT
+	cmplt	r2, r5, r0								# r2 <- Y < 0
+	bne		r2, r0, Limit_Y_To_Min_Write			# Limit Y if Y < HEIGHT
+	br 		Write_Pixel_Value						# Otherwise, just write pixel value
+Limit_Y_To_Max_Write:
+.if USE_WRAPAROUND == 1
+	subi	r5, r5, HEIGHT							# r5 <- Y - HEIGHT
+	br		Write_Pixel_Value
+.else
+	#mov		r6, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_WritePixel
+.endif
+Limit_Y_To_Min_Write:
+.if USE_WRAPAROUND == 1
+	movui	r2, HEIGHT								# r2 <- HEIGHT
+	add		r5, r2, r5								# r5 <- HEIGHT + (-Y)
+	br		Write_Pixel_Value
+.else
+	#mov		r6, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_WritePixel
+.endif
+	
+Write_Pixel_Value:
     slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
     slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r4 <- Calculated memory offset due to X
     add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
-    call	GetBufferPointer			            # r2 <- Current buffer address
-    add 	r5, r5, r2                              # r5 <- Calculated memory address for specified X,Y
+    # call	GetBufferPointer			            # r2 <- Current buffer address
+    add 	r5, r5, r10                             # r5 <- Calculated memory address for specified X,Y (r10 contains current framebuffer address)
  
 .if LOG2_BYTES_PER_PIXEL == 0
   	stbio 	r6, 0(r5)								# Write 8-bit pixel to vga pixel buffer
@@ -662,6 +718,7 @@ WritePixel:
     .error "Error: Unknown pixel size"
 .endif
     
+End_WritePixel:
     ldw 	ra, 16(sp)
     #ldw 	r6, 12(sp)
     ldw 	r5, 8(sp)
@@ -679,12 +736,61 @@ ReadPixel:
     stw 	r4, 0(sp)
     stw 	r5, 4(sp)
     stw 	ra, 8(sp)
-    
+	
+Check_To_Limit_X_Read:
+	cmpgei	r2, r4, WIDTH							# r2 <- X >= WIDTH
+	bne		r2, r0, Limit_X_To_Max_Read				# Limit X if X >= WIDTH
+	cmplt	r2, r4, r0								# r2 <- X < 0
+	bne		r2, r0, Limit_X_To_Min_Read				# Limit X if X < WIDTH
+	br 		Check_To_Limit_Y_Read					# Otherwise, check to limit Y
+Limit_X_To_Max_Read:
+.if USE_WRAPAROUND == 1
+	subi	r4, r4, WIDTH							# r4 <- X - WIDTH
+	br		Check_To_Limit_Y_Read
+.else
+	mov		r2, r0									# Without wraparound, if X is out of bounds, this cell is not alive
+	br		End_ReadPixel
+.endif
+Limit_X_To_Min_Read:
+.if USE_WRAPAROUND == 1
+	movui	r2, WIDTH								# r2 <- WIDTH
+	add		r4, r2, r4								# r4 <- WIDTH + (-X)
+	br		Check_To_Limit_Y_Read
+.else
+	mov		r2, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_ReadPixel
+.endif
+	
+Check_To_Limit_Y_Read:
+	cmpgei	r2, r5, HEIGHT							# r2 <- Y >= HEIGHT
+	bne		r2, r0, Limit_Y_To_Max_Read				# Limit Y if Y >= HEIGHT
+	cmplt	r2, r5, r0								# r2 <- Y < 0
+	bne		r2, r0, Limit_Y_To_Min_Read				# Limit Y if Y < HEIGHT
+	br 		Read_Pixel_Value						# Otherwise, just read pixel value
+Limit_Y_To_Max_Read:
+.if USE_WRAPAROUND == 1
+	subi	r5, r5, HEIGHT							# r5 <- Y - HEIGHT
+	br		Read_Pixel_Value
+.else
+	mov		r2, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_ReadPixel
+.endif
+Limit_Y_To_Min_Read:
+.if USE_WRAPAROUND == 1
+	movui	r2, HEIGHT								# r2 <- HEIGHT
+	add		r5, r2, r5								# r5 <- HEIGHT + (-Y)
+	br		Read_Pixel_Value
+.else
+	mov		r2, r0									# Without wraparound, if Y is out of bounds, this cell is not alive
+	br		End_ReadPixel
+.endif
+	
+Read_Pixel_Value:
     slli 	r5, r5, LOG2_BYTES_PER_ROW              # r5 <- Calculated memory offset due to Y
     slli 	r4, r4, LOG2_BYTES_PER_PIXEL            # r4 <- Calculated memory offset due to X
     add 	r5, r5, r4                              # r5 <- Calculated memory offset for specified X,Y
-    call	GetOppositeBufferPointer			    # r2 <- Non-current buffer address
-    add 	r5, r5, r2                              # r5 <- Calculated memory address for specified X,Y
+    # call	GetOppositeBufferPointer			    # r2 <- Non-current buffer address
+    add 	r5, r5, r11                             # r5 <- Calculated memory address for specified X,Y (r11 contains non-current framebuffer address)
  
 .if LOG2_BYTES_PER_PIXEL == 0
   	ldbuio 	r2, 0(r5)								# Read 8-bit pixel from vga pixel buffer
@@ -695,7 +801,8 @@ ReadPixel:
 .else
     .error "Error: Unknown pixel size"
 .endif
-    
+   
+End_ReadPixel:
     ldw 	ra, 8(sp)
     ldw 	r5, 4(sp)
     ldw 	r4, 0(sp)
@@ -703,25 +810,24 @@ ReadPixel:
     ret
 
 
-# r2: Returns a pointer to the current framebuffer
+# r10: Returns a pointer to the current framebuffer
 GetBufferPointer:
-	ldb		r2, CUR_BUFFER(r0)
-	bne		r0, r2, 1f
-	movia	r2, FRAMEBUFFER_B
+	ldb		r10, CUR_BUFFER(r0)
+	bne		r0, r10, 1f
+	movia	r10, FRAMEBUFFER_B
 	ret
 1:
-	movia	r2, FRAMEBUFFER_A
+	movia	r10, FRAMEBUFFER_A
 	ret
 
-	
-# r2: Returns a pointer to the non-current framebuffer
+# r11: Returns a pointer to the non-current framebuffer
 GetOppositeBufferPointer:
-	ldb		r2, CUR_BUFFER(r0)
-	beq		r0, r2, 1f
-	movia	r2, FRAMEBUFFER_B
+	ldb		r11, CUR_BUFFER(r0)
+	beq		r0, r11, 1f
+	movia	r11, FRAMEBUFFER_B
 	ret
 1:
-	movia	r2, FRAMEBUFFER_A
+	movia	r11, FRAMEBUFFER_A
 	ret
 
 # void SwapBuffers(void)
@@ -733,10 +839,10 @@ SwapBuffers:
 	stw		r8,  8(sp)
 	stw		r9, 12(sp)
 	
-	call	GetBufferPointer
+	# call	GetBufferPointer
 	movia	r8, VGAPIX_CONTROL
-	stwio	r2, 4(r8)
-	stwio	r2, 0(r8)
+	stwio	r10, 4(r8)						# (r10 contains current framebuffer address)
+	stwio	r10, 0(r8)						# (r10 contains current framebuffer address)
 	
 	# Busy-loop until buffer is done being displayed
 1:
@@ -749,6 +855,9 @@ SwapBuffers:
 	ldb		r8, CUR_BUFFER(r0)
 	cmpeq	r8, r0, r8
 	stb		r8, CUR_BUFFER(r0)
+	
+	call	GetBufferPointer				# r10 <- Current buffer pointer
+	call	GetOppositeBufferPointer		# r11 <- Non-current buffer address
 	
 	ldw		ra,  0(sp)
 	ldw		r2,  4(sp)
