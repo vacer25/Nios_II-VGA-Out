@@ -5,6 +5,7 @@ The programs are designed to be compatible with Altera DE0, DE1-SoC, DE2 / DE2-1
 So far, the code has only been tested on the DE1-SoC board and is confirmed to be working.
 
 ## [Simulator website](https://cpulator.01xz.net/?sys=nios-de0)
+In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Suspicious use of cache bypass`
 
 ## Projects so far:                                         
 * **Pong**  
@@ -23,6 +24,7 @@ So far, the code has only been tested on the DE1-SoC board and is confirmed to b
 * **Game of Life**  
 	- Minimal proof of concept implementation for now
 	- Preset 2 glider pattern for testing
+	- Button 0 is used to start the simulation
 	
 	<br>
 	<img src="GOL/Screenshots/GOL_New.gif" alt="GOL" style="width: 500px;"/>
