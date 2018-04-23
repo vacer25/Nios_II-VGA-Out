@@ -2,7 +2,7 @@
 Various VGA video output projects on the NIOS II processor, written in assembly.
 
 The programs are designed to be compatible with Altera DE0, DE1-SoC, DE2 / DE2-115, and DE10-Lite FPGA boards.  
-So far, the code has only been tested on the DE1-SoC board and is confirmed to be working.
+So far, the code has been tested on the DE1-SoC and DE0-CV boards and is confirmed to be working.
 
 ## [Simulator website](https://cpulator.01xz.net/?sys=nios-de0)
 In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Suspicious use of cache bypass`
