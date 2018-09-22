@@ -30,6 +30,9 @@ In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Su
 	<img src="GOL/Screenshots/GOL_New.gif" alt="GOL" style="width: 500px;"/>
 	
 ## TODO:
+
+**Pong**
+
 1. [x] Figure out double buffering (done on 2018-03-09)
 1. [ ] Implement some form of randomness (starting ball directions, etc...)
 	- In progress (PRNG implemented but not yet used)
@@ -40,10 +43,12 @@ In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Su
 1. [x] Interface with two SNES controllers (done on 2018-03-19)
 1. [ ] Add Pong AI
 
-2. [ ] Optimize GOL updates (tune memory access to increase speed)
+**GOL**
+
+2. [ ] Optimize updates (tune memory access to increase speed)
 	- In progress
-2. [ ] Add boundry checking and wrap-around mode to GOL
+2. [ ] Add boundry checking and wrap-around mode
 	- In progress
-2. [ ] Add random fill to init. GOL playfield
-2. [ ] Add other rulesets to GOL (in a general way)
-2. [ ] Add colouring of cells to GOL 
+2. [ ] Add random fill to init. playfield
+2. [ ] Add other rulesets (in a general way)
+2. [ ] Add colouring of cells
