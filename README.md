@@ -1,8 +1,8 @@
 # Nios II VGA Out
 Various VGA video output projects on the NIOS II processor, written in assembly.
 
-The programs are designed to be compatible with Altera DE0, DE1-SoC, DE2 / DE2-115, and DE10-Lite FPGA boards.  
-So far, the code has been tested on the DE1-SoC and DE0-CV boards and is confirmed to be working.
+The programs are designed to be compatible with Altera `DE0`, `DE1-SoC`, `DE2` / `DE2-115`, and `DE10-Lite` FPGA boards.  
+So far, the code has been tested on the `DE1-SoC` and `DE0-CV` boards and is confirmed to be working.
 
 ## [Simulator website](https://cpulator.01xz.net/?sys=nios-de0)
 In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Suspicious use of cache bypass`
@@ -39,9 +39,10 @@ In lower-left settings pane, disable: `Device-specific warnings` and `Memory: Su
 1. [x] Interface with one SNES controller (done on 2018-03-11)
 1. [x] Interface with two SNES controllers (done on 2018-03-19)
 1. [ ] Add Pong AI
+
 2. [ ] Optimize GOL updates (tune memory access to increase speed)
 	- In progress
-2. [ ] Add boundry checking and wrap-around mode
+2. [ ] Add boundry checking and wrap-around mode to GOL
 	- In progress
 2. [ ] Add random fill to init. GOL playfield
 2. [ ] Add other rulesets to GOL (in a general way)
